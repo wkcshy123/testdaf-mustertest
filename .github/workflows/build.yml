@@ -33,6 +33,10 @@ jobs:
             --clean `
             --noconfirm `
             --hidden-import=customtkinter `
+            --hidden-import=tkinter.filedialog `
+            --hidden-import=tkinter.messagebox `
+            --hidden-import=tkinter.ttk `
+            --collect-submodules=dashscope.aigc `
             --distpath=dist `
             --workpath=build
 
@@ -74,6 +78,10 @@ jobs:
             --clean \
             --noconfirm \
             --hidden-import=customtkinter \
+            --hidden-import=tkinter.filedialog \
+            --hidden-import=tkinter.messagebox \
+            --hidden-import=tkinter.ttk \
+            --collect-submodules=dashscope.aigc \
             --distpath=dist \
             --workpath=build
 
