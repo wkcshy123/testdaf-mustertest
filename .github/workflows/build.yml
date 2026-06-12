@@ -1,0 +1,89 @@
+name: Build Windows & macOS App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:          # 允许手动触发
+
+jobs:
+  # ────────────────────────── Windows ──────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: PyInstaller 打包（Windows）
+        run: |
+          uv run pyinstaller app.py `
+            --name="德语转语音" `
+            --onedir `
+            --windowed `
+            --clean `
+            --noconfirm `
+            --hidden-import=customtkinter `
+            --distpath=dist `
+            --workpath=build
+
+      - name: 压缩产物
+        run: |
+          Compress-Archive -Path dist\德语转语音 -DestinationPath dist\德语转语音-Windows.zip
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 德语转语音-Windows
+          path: dist/德语转语音-Windows.zip
+          retention-days: 30
+
+  # ────────────────────────── macOS ────────────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: PyInstaller 打包（macOS）
+        run: |
+          uv run pyinstaller app.py \
+            --name="德语转语音" \
+            --onedir \
+            --windowed \
+            --clean \
+            --noconfirm \
+            --hidden-import=customtkinter \
+            --distpath=dist \
+            --workpath=build
+
+      - name: 压缩产物
+        run: |
+          cd dist && zip -r 德语转语音-macOS.zip 德语转语音.app
+
+      - name: 上传 macOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 德语转语音-macOS
+          path: dist/德语转语音-macOS.zip
+          retention-days: 30
