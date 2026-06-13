@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}系统总览 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">TestDaF Authoring Platform</p>
+  <h1>本地优先的 TestDaF 模拟考试出题系统</h1>
+  <p class="lead">
+    为德语培训教师提供听力、阅读、写作、口语四大模块的 AI 出题、素材生成、音频合成、
+    图表生成和本地题库管理能力。
+  </p>
+  <div class="actions">
+    <a class="button primary" href="/teacher">进入老师出题系统</a>
+    <a class="button secondary" href="/student">查看学生答题入口</a>
+  </div>
+</section>
+
+<section class="grid">
+  <article class="card metric">
+    <span>本地题库题目数</span>
+    <strong>{{ question_count }}</strong>
+  </article>
+  <article class="card">
+    <h2>老师后台</h2>
+    <p>按 TestDaF 题型拆分独立出题页，支持参考素材、网页链接、本地图片、音色和难度参数。</p>
+  </article>
+  <article class="card">
+    <h2>学生前台</h2>
+    <p>当前用于浏览本地题库，后续将扩展为完整模拟考试、作答保存和评分反馈入口。</p>
+  </article>
+  <article class="card">
+    <h2>本地优先</h2>
+    <p>所有题目包、预览、音频、图表和上传素材都会落盘到项目根目录下的 question_bank。</p>
+  </article>
+</section>
+{% endblock %}

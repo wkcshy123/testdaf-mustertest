@@ -15,5 +15,8 @@ wheels/
 # macOS
 .DS_Store
 
-# PyInstaller spec（本地生成，CI 会自动生成）
-*.spec
+# Local generated question data
+question_bank/
+
+# Local reference PDFs
+Modelltest_01_*.pdf

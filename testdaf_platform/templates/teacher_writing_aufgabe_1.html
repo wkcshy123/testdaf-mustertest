@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}写作 Aufgabe 1 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Schriftlicher Ausdruck</p>
+  <h1>写作题出题</h1>
+  <p class="lead">生成 TestDaF 写作任务：短背景描述、讨论问题、写作要求，以及 1-2 张可预览和持久化保存的图表。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+  </div>
+</section>
+
+{% if created %}<div class="notice">写作题目包已生成：{{ created }}</div>{% endif %}
+{% if error %}<div class="notice error">生成失败：{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>生成 Schriftlicher Ausdruck</h2>
+    <span>题干 → 图表数据 → SVG 图表 → 本地题库</span>
+  </div>
+  <form class="form" method="post" action="/teacher/writing/aufgabe-1/create" enctype="multipart/form-data" accept-charset="UTF-8">
+    <label>主题领域<input name="topic" required placeholder="例如：大学生兼职、数字化学习、城市交通、健康保险、线上课程"></label>
+    <label>文字参考素材<textarea name="reference_material" rows="6" placeholder="可选。粘贴中文或德语参考材料、争议点、必须覆盖的信息点。"></textarea></label>
+    <label>网页参考链接<textarea name="reference_urls" rows="3" placeholder="可选。一行一个 HTML 网页链接，支持多个链接。"></textarea></label>
+    <label>本地参考图片
+      <input name="reference_images" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+    </label>
+    <label>参考图片说明<textarea name="image_notes" rows="4" placeholder="可选。说明上传图片中需要关注的数据、主题、图表趋势或视觉信息。qwen3.7-plus 会同时读取图片内容。"></textarea></label>
+    <div class="form-row">
+      <label>难度<select name="difficulty"><option value="standard" selected>标准 B2-C1</option><option value="easy">偏简单</option><option value="hard">偏困难</option></select></label>
+      <label>图表数量<select name="chart_count"><option value="1">1 张</option><option value="2" selected>2 张</option></select></label>
+      <label>图表类型偏好<select name="chart_type_preference"><option value="mixed" selected>自动混合</option><option value="bar">柱状图</option><option value="line">折线图</option><option value="pie">饼图/比例图</option></select></label>
+    </div>
+    <div class="form-row">
+      <label>论证侧重<select name="argument_focus"><option value="balanced" selected>利弊平衡</option><option value="policy">政策建议</option><option value="personal_position">个人立场</option><option value="social_impact">社会影响</option></select></label>
+      <label>联系自己国家<select name="country_comparison"><option value="required" selected>要求联系自己国家</option><option value="optional">可选联系</option><option value="none">不要求</option></select></label>
+    </div>
+    <label>阿里云百炼 API Key<input name="api_key" type="password" placeholder="可选。留空时使用本地已保存配置或 DASHSCOPE_API_KEY 环境变量。"></label>
+    <button class="button primary" type="submit">生成写作题并保存到本地题库</button>
+  </form>
+</section>
+
+{% include "teacher_preview_block.html" %}
+{% include "teacher_question_list_block.html" %}
+{% endblock %}

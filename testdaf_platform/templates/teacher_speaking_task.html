@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}口语 Aufgabe {{ number }} · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Mündlicher Ausdruck</p>
+  <h1>口语 Aufgabe {{ number }} · {{ profile.name }}</h1>
+  <p class="lead">单题生成：场景、回答要点、对方引子语音{% if profile.needs_chart %}，以及本题图表{% endif %}。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+  </div>
+</section>
+
+{% if created %}<div class="notice">口语题已生成：{{ created }}</div>{% endif %}
+{% if error %}<div class="notice error">生成失败：{{ error }}</div>{% endif %}
+
+{% if job_id %}
+<section class="panel job-panel" data-job-id="{{ job_id }}">
+  <div class="panel-title">
+    <h2>生成任务进行中</h2>
+    <span id="job-status">queued</span>
+  </div>
+  <p id="job-step" class="lead">等待开始</p>
+  <p class="empty">你可以继续打开其它单题页面并启动生成；多个单题会在后台并行处理。</p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>生成口语 Aufgabe {{ number }}</h2>
+    <span>准备 {{ profile.prep_time }} · 回答 {{ profile.speaking_time }}</span>
+  </div>
+  <p class="empty">考查：{{ profile.exam_focus }}</p>
+  <form class="form" method="post" action="/teacher/speaking/aufgabe-{{ number }}/create" enctype="multipart/form-data" accept-charset="UTF-8">
+    <div class="form-row">
+      <label>参考主题<input name="topic" required placeholder="例如：校园课程咨询、环境污染、出行选择"></label>
+      <label>难度<select name="difficulty"><option value="standard" selected>标准 B2-C1</option><option value="easy">偏简单</option><option value="hard">偏困难</option></select></label>
+    </div>
+    <label>文字参考素材<textarea name="reference_material" rows="5" placeholder="可选。粘贴本题必须覆盖的信息点或参考素材。"></textarea></label>
+    <label>网页参考链接<textarea name="reference_urls" rows="2" placeholder="可选。一行一个 HTML 网页链接。"></textarea></label>
+    <div class="form-row">
+      <label>发问者角色<input name="examiner_role" placeholder="可选。留空使用默认角色。"></label>
+      <label>引子音色<select name="voice">
+        {% for voice_id, voice_label in voices %}
+        <option value="{{ voice_id }}" {% if loop.first %}selected{% endif %}>{{ voice_label }}</option>
+        {% endfor %}
+      </select></label>
+    </div>
+    {% if profile.needs_chart %}
+    <div class="form-row">
+      <label>图表类型偏好<select name="chart_type_preference"><option value="mixed" selected>自动</option><option value="bar">柱状图</option><option value="line">折线图</option><option value="pie">比例图</option></select></label>
+      <label>参考图片<input name="reference_images" type="file" accept="image/png,image/jpeg,image/webp" multiple></label>
+    </div>
+    <label>参考图片说明<textarea name="image_notes" rows="3" placeholder="可选。说明参考图片中的趋势、数据、对比对象或需要转化的内容。"></textarea></label>
+    {% else %}
+    <input type="hidden" name="chart_type_preference" value="none">
+    {% endif %}
+    <label>阿里云百炼 API Key<input name="api_key" type="password" placeholder="可选。留空时使用本地已保存配置或 DASHSCOPE_API_KEY 环境变量。"></label>
+    <button class="button primary" type="submit">后台生成并保存到本地题库</button>
+  </form>
+</section>
+
+{% include "teacher_preview_block.html" %}
+{% include "teacher_question_list_block.html" %}
+{% endblock %}

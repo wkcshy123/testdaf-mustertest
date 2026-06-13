@@ -1,0 +1,32 @@
+<section class="panel">
+  <div class="panel-title">
+    <h2>已有 {{ task_label }} 题目</h2>
+    <span>{{ questions|length }} 条</span>
+  </div>
+  {% if questions %}
+  <div class="table">
+    {% for question in questions %}
+    <article class="table-row">
+      <div>
+        <strong>{{ question.title }}</strong>
+        <small>{{ question.topic }} · {{ question.id }}</small>
+        {% if question.parameters and question.parameters.topic_input %}
+        <small>主题：{{ question.parameters.topic_input }}</small>
+        {% elif question.parameters and question.parameters.scenario %}
+        <small>场景：{{ question.parameters.scenario }}</small>
+        {% endif %}
+      </div>
+      <div class="table-actions">
+        {% if question.assets and question.assets.audio %}
+        <a href="/question-bank/{{ question._path }}/{{ question.assets.audio }}" target="_blank">试听音频</a>
+        {% endif %}
+        <a href="{{ task_url }}?created={{ question.id }}">预览</a>
+        <span>{{ question.created_at }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">还没有 {{ task_label }} 题目。</p>
+  {% endif %}
+</section>

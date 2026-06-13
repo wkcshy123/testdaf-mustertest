@@ -1,0 +1,16 @@
+{% if preview %}
+<section class="panel">
+  <div class="panel-title">
+    <h2>最近生成题目预览</h2>
+    <span>{{ preview.manifest.id }}</span>
+  </div>
+  {% if preview.manifest.assets and preview.manifest.assets.audio %}
+  <div class="preview-actions">
+    <a class="button secondary" href="/question-bank/{{ preview.path }}/{{ preview.manifest.assets.audio }}" target="_blank">试听完整音频</a>
+  </div>
+  {% endif %}
+  <article class="markdown-preview">
+    {{ preview.html | safe }}
+  </article>
+</section>
+{% endif %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}学生答题 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Student Portal</p>
+  <h1>学生答题入口</h1>
+  <p class="lead">当前阶段展示题库消费入口，下一阶段会按题型加载听力材料、播放音频并保存作答记录。</p>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>可用题目包</h2>
+    <span>{{ questions|length }} 条</span>
+  </div>
+  {% if questions %}
+  <div class="table">
+    {% for question in questions %}
+    <article class="table-row">
+      <div>
+        <strong>{{ question.title }}</strong>
+        <small>{{ question.section }} · {{ question.task_type }} · {{ question.topic }}</small>
+      </div>
+      <span>{{ question.id }}</span>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">暂无题目包。请先在老师后台创建听力题草稿。</p>
+  {% endif %}
+</section>
+{% endblock %}
+

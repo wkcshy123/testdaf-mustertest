@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TestDaF 模拟考试系统{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">T</span>
+        <div>
+          <strong>TestDaF Studio</strong>
+          <small>本地优先 · 模块化题库</small>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/">总览</a>
+        <a href="/teacher">老师出题</a>
+        <a href="/student">学生答题</a>
+      </nav>
+    </aside>
+    <main class="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script>
+    const jobPanel = document.querySelector("[data-job-id]");
+    if (jobPanel) {
+      const jobId = jobPanel.dataset.jobId;
+      const statusNode = document.getElementById("job-status");
+      const stepNode = document.getElementById("job-step");
+      const poll = async () => {
+        const response = await fetch(`/jobs/${jobId}`);
+        const data = await response.json();
+        statusNode.textContent = data.status || "unknown";
+        stepNode.textContent = data.step || "";
+        if (data.status === "success" && data.result_url) {
+          window.location.href = data.result_url;
+          return;
+        }
+        if (data.status === "failed") {
+          stepNode.textContent = data.error || "生成失败";
+          jobPanel.classList.add("error");
+          return;
+        }
+        setTimeout(poll, 1500);
+      };
+      poll();
+    }
+  </script>
+</body>
+</html>

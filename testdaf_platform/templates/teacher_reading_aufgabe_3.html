@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}阅读 Aufgabe 3 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Leseverstehen · Aufgabe 3</p>
+  <h1>Ja / Nein / 未提及</h1>
+  <p class="lead">生成较高信息密度阅读文本，并配套 10 道 Ja / Nein / Text sagt dazu nichts 判断题。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+    <a class="button secondary" href="/teacher/reading/aufgabe-1">切换到 Aufgabe 1</a>
+    <a class="button secondary" href="/teacher/reading/aufgabe-2">切换到 Aufgabe 2</a>
+  </div>
+</section>
+
+{% if created %}<div class="notice">阅读 Aufgabe 3 题目包已生成：{{ created }}</div>{% endif %}
+{% if error %}<div class="notice error">生成失败：{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>生成阅读 Aufgabe 3</h2>
+    <span>长文本 → Ja/Nein/未提及 → 精细判断</span>
+  </div>
+  <form class="form" method="post" action="/teacher/reading/aufgabe-3/create" accept-charset="UTF-8">
+    <label>学术/社会文化主题<input name="topic" required placeholder="例如：文化遗产保护、科研伦理、大学教育政策、数字化档案"></label>
+    <label>文字参考素材<textarea name="reference_material" rows="6" placeholder="可选。粘贴背景材料、关键词、论点、例子或必须覆盖的信息。"></textarea></label>
+    <label>网页参考链接<textarea name="reference_urls" rows="3" placeholder="可选。一行一个 HTML 网页链接，支持多个链接。"></textarea></label>
+    <div class="form-row">
+      <label>难度<select name="difficulty"><option value="standard" selected>标准 B2-C1</option><option value="easy">偏简单</option><option value="hard">偏困难</option></select></label>
+      <label>判断项分布<select name="judgement_balance"><option value="balanced" selected>三类大体均衡</option><option value="natural">按文本自然分布</option></select></label>
+      <label>未提及项强度<select name="unsupported_items"><option value="standard" selected>标准</option><option value="strong">强化未提及干扰</option></select></label>
+    </div>
+    <label>阿里云百炼 API Key<input name="api_key" type="password" placeholder="可选。留空时使用本地已保存配置或 DASHSCOPE_API_KEY 环境变量。"></label>
+    <button class="button primary" type="submit">生成 Aufgabe 3 并保存到本地题库</button>
+  </form>
+</section>
+
+{% include "teacher_preview_block.html" %}
+{% include "teacher_question_list_block.html" %}
+{% endblock %}

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}听力 Aufgabe 2 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Hörverstehen · Aufgabe 2</p>
+  <h1>专题访谈 R/F 判断</h1>
+  <p class="lead">主持人与两位专家的广播访谈，生成 10 条 Richtig/Falsch 判断陈述，并合成三说话人音频。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+    <a class="button secondary" href="/teacher/listening/aufgabe-1">切换到 Aufgabe 1</a>
+  </div>
+</section>
+
+{% if created %}
+<div class="notice">听力 Aufgabe 2 题目包已生成：{{ created }}</div>
+{% endif %}
+
+{% if error %}
+<div class="notice error">生成失败：{{ error }}</div>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>生成听力 Aufgabe 2</h2>
+    <span>专题访谈 → 10 条 R/F → 三人音频</span>
+  </div>
+  <form class="form" method="post" action="/teacher/listening/aufgabe-2/create" accept-charset="UTF-8">
+    <label>
+      专题主题
+      <input name="topic" required placeholder="例如：Assessment-Center 与现代人员选拔">
+    </label>
+    <label>
+      文字参考素材
+      <textarea name="reference_material" rows="6" placeholder="可选。粘贴中文或德语背景材料、关键词、必须覆盖的观点或数据。"></textarea>
+    </label>
+    <label>
+      网页参考链接
+      <textarea name="reference_urls" rows="3" placeholder="可选。一行一个 HTML 网页链接，支持多个链接。"></textarea>
+    </label>
+    <div class="form-row">
+      <label>
+        难度
+        <select name="difficulty">
+          <option value="standard" selected>标准 B2-C1</option>
+          <option value="easy">偏简单</option>
+          <option value="hard">偏困难</option>
+        </select>
+      </label>
+      <label>
+        信息流
+        <select name="information_flow">
+          <option value="sequential" selected>顺序</option>
+          <option value="shuffled">局部打乱</option>
+        </select>
+      </label>
+      <label>
+        R/F 分布
+        <select name="statement_balance">
+          <option value="balanced" selected>5 Richtig + 5 Falsch</option>
+          <option value="mostly_balanced">大体平衡</option>
+        </select>
+      </label>
+      <label>
+        语速
+        <select name="speed">
+          <option value="slow">偏慢</option>
+          <option value="normal" selected>标准</option>
+          <option value="fast">偏快</option>
+        </select>
+      </label>
+      <label>
+        A 主持人音色
+        <select name="host_voice">
+          {% for value, label in voices %}
+          <option value="{{ value }}" {% if value == "Neil" %}selected{% endif %}>{{ value }} · {{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        B 嘉宾音色
+        <select name="guest_b_voice">
+          {% for value, label in voices %}
+          <option value="{{ value }}" {% if value == "Maia" %}selected{% endif %}>{{ value }} · {{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        C 嘉宾音色
+        <select name="guest_c_voice">
+          {% for value, label in voices %}
+          <option value="{{ value }}" {% if value == "Ethan" %}selected{% endif %}>{{ value }} · {{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>
+      阿里云百炼 API Key
+      <input name="api_key" type="password" placeholder="可选。留空时使用本地已保存配置或 DASHSCOPE_API_KEY 环境变量。">
+    </label>
+    <button class="button primary" type="submit">生成 Aufgabe 2 并保存到本地题库</button>
+  </form>
+</section>
+
+{% if preview %}
+<section class="panel">
+  <div class="panel-title">
+    <h2>最近生成题目预览</h2>
+    <span>{{ preview.manifest.id }}</span>
+  </div>
+  {% if preview.manifest.assets and preview.manifest.assets.audio %}
+  <div class="preview-actions">
+    <a class="button secondary" href="/question-bank/{{ preview.path }}/{{ preview.manifest.assets.audio }}" target="_blank">试听完整音频</a>
+  </div>
+  {% endif %}
+  <article class="markdown-preview">
+    {{ preview.html | safe }}
+  </article>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>已有 Aufgabe 2 题目</h2>
+    <span>{{ questions|length }} 条</span>
+  </div>
+  {% if questions %}
+  <div class="table">
+    {% for question in questions %}
+    <article class="table-row">
+      <div>
+        <strong>{{ question.title }}</strong>
+        <small>{{ question.topic }} · {{ question.id }}</small>
+        {% if question.parameters and question.parameters.topic_input %}
+        <small>主题：{{ question.parameters.topic_input }}</small>
+        {% endif %}
+      </div>
+      <div class="table-actions">
+        {% if question.assets and question.assets.audio %}
+        <a href="/question-bank/{{ question._path }}/{{ question.assets.audio }}" target="_blank">试听音频</a>
+        {% endif %}
+        <a href="/teacher/listening/aufgabe-2?created={{ question.id }}">预览</a>
+        <span>{{ question.created_at }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">还没有 Aufgabe 2 题目。</p>
+  {% endif %}
+</section>
+{% endblock %}

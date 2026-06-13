@@ -1,11 +1,15 @@
 [project]
-name = "german-tts"
+name = "testdaf-platform"
 version = "0.1.0"
-description = "Add your description here"
+description = "本地优先的 TestDaF 模拟考试 Web 出题与答题系统"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "customtkinter>=5.2.2",
     "dashscope>=1.25.21",
-    "pyinstaller>=6.20.0",
+    "fastapi>=0.124.0",
+    "jinja2>=3.1.6",
+    "markdown>=3.10",
+    "python-multipart>=0.0.20",
+    "requests>=2.32.5",
+    "uvicorn>=0.38.0",
 ]

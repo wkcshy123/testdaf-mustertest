@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}老师出题 · TestDaF Studio{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Authoring Console</p>
+  <h1>老师出题系统</h1>
+  <p class="lead">按 TestDaF 四大模块组织题型。进入具体题型页后，可以填写主题、参考素材和题型参数，生成完整题目包并保存到本地题库。</p>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>听力模块</h2>
+    <span>{{ listening_count }} 条题目</span>
+  </div>
+  <div class="grid">
+    <article class="card">
+      <p class="eyebrow">Hörverstehen · Aufgabe 1</p>
+      <h2>校园场景短答对话</h2>
+      <p>两人校园对话，生成 8 道 Stichwörter 短答题，适合练习具体信息提取。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/listening/aufgabe-1">进入出题页</a>
+      </div>
+    </article>
+    <article class="card">
+      <p class="eyebrow">Hörverstehen · Aufgabe 2</p>
+      <h2>专题访谈 R/F 判断</h2>
+      <p>主持人与两位专家的广播访谈，生成 10 条 Richtig/Falsch 判断陈述。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/listening/aufgabe-2">进入出题页</a>
+      </div>
+    </article>
+    <article class="card">
+      <p class="eyebrow">Hörverstehen · Aufgabe 3</p>
+      <h2>专家访谈短答</h2>
+      <p>主持人与一位专家的一对一学术/科普访谈，生成 7 道短答题，题号 19-25。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/listening/aufgabe-3">进入出题页</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>阅读模块</h2>
+    <span>{{ reading_count }} 条题目</span>
+  </div>
+  <div class="grid">
+    <article class="card">
+      <p class="eyebrow">Leseverstehen · Aufgabe 1</p>
+      <h2>信息匹配</h2>
+      <p>短文本 A-H 与 10 个人物需求匹配，包含无匹配项 I。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/reading/aufgabe-1">进入出题页</a>
+      </div>
+    </article>
+    <article class="card">
+      <p class="eyebrow">Leseverstehen · Aufgabe 2</p>
+      <h2>说明文三选一</h2>
+      <p>中长说明文或科普文，生成 10 道 A/B/C 单选题。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/reading/aufgabe-2">进入出题页</a>
+      </div>
+    </article>
+    <article class="card">
+      <p class="eyebrow">Leseverstehen · Aufgabe 3</p>
+      <h2>Ja / Nein / 未提及</h2>
+      <p>较高信息密度文本，判断原文支持、相反或未提及。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/reading/aufgabe-3">进入出题页</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>写作模块</h2>
+    <span>{{ writing_count }} 条题目</span>
+  </div>
+  <div class="grid">
+    <article class="card">
+      <p class="eyebrow">Schriftlicher Ausdruck</p>
+      <h2>图表描述与论述写作</h2>
+      <p>生成短背景、讨论问题、写作要求和 1-2 张图表，支持多张本地参考图片。</p>
+      <div class="actions">
+        <a class="button primary" href="/teacher/writing/aufgabe-1">进入出题页</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>口语模块</h2>
+    <span>{{ speaking_count }} 条题目</span>
+  </div>
+  <div class="grid">
+    {% for number, profile in speaking_profiles.items() %}
+    <article class="card">
+      <p class="eyebrow">Mündlicher Ausdruck · Aufgabe {{ number }}</p>
+      <h2>{{ profile.name }}</h2>
+      <p>{{ profile.description }}</p>
+      <small>准备 {{ profile.prep_time }} · 回答 {{ profile.speaking_time }}{% if profile.needs_chart %} · 图表题{% endif %}</small>
+      <div class="actions">
+        <a class="button primary" href="/teacher/speaking/aufgabe-{{ number }}">进入出题页</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>最近题目</h2>
+    <span>最多显示 8 条</span>
+  </div>
+  {% if questions %}
+  <div class="table">
+    {% for question in questions[:8] %}
+    <article class="table-row">
+      <div>
+        <strong>{{ question.title }}</strong>
+        <small>{{ question.topic }} · {{ question.task_type }} · {{ question.id }}</small>
+        {% if question.parameters and question.parameters.scenario %}
+        <small>场景：{{ question.parameters.scenario }}</small>
+        {% elif question.parameters and question.parameters.topic_input %}
+        <small>主题：{{ question.parameters.topic_input }}</small>
+        {% endif %}
+      </div>
+      <div class="table-actions">
+        {% if question.assets and question.assets.audio %}
+        <a href="/question-bank/{{ question._path }}/{{ question.assets.audio }}" target="_blank">试听音频</a>
+        {% endif %}
+        <a href="/teacher/{{ question.section }}/{{ question.task_type | replace('_', '-') }}?created={{ question.id }}">查看题型页</a>
+        <span>{{ question.created_at }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">还没有题目。选择上方任意题型进入出题页，生成结果会自动保存到本地题库。</p>
+  {% endif %}
+</section>
+{% endblock %}
