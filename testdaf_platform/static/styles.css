@@ -8,6 +8,8 @@
   --accent-strong: #0f3f39;
   --gold: #c18f35;
   --shadow: 0 24px 60px rgba(31, 38, 42, 0.12);
+  --content-max: 1760px;
+  --readable-max: 1180px;
 }
 
 * {
@@ -27,7 +29,7 @@ body {
 
 .shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -88,8 +90,8 @@ body {
 }
 
 .main {
-  width: min(1180px, 100%);
-  padding: 44px 48px 64px;
+  width: min(var(--content-max), 100%);
+  padding: clamp(36px, 3.8vw, 72px) clamp(36px, 4.2vw, 88px) 72px;
 }
 
 .hero,
@@ -164,8 +166,12 @@ h2 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: clamp(18px, 1.4vw, 26px);
+}
+
+.grid > .card:only-child {
+  max-width: 620px;
 }
 
 .card,
@@ -179,7 +185,7 @@ h2 {
 
 .card,
 .panel {
-  padding: 24px;
+  padding: clamp(22px, 1.7vw, 32px);
 }
 
 .card {
@@ -271,6 +277,7 @@ h2 {
 .form {
   display: grid;
   gap: 16px;
+  max-width: var(--readable-max);
 }
 
 label {
@@ -345,6 +352,7 @@ textarea {
 }
 
 .markdown-preview {
+  max-width: 1280px;
   padding: 24px;
   border: 1px solid rgba(30, 37, 40, 0.08);
   background: rgba(255, 255, 255, 0.58);
@@ -399,6 +407,52 @@ textarea {
   border-radius: 18px;
   background: #fff;
   vertical-align: top;
+}
+
+@media (min-width: 1440px) {
+  .shell {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 32px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  }
+
+  .lead {
+    max-width: 920px;
+  }
+}
+
+@media (min-width: 1800px) {
+  :root {
+    --content-max: 1920px;
+  }
+
+  .shell {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .main {
+    padding: 36px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  }
 }
 
 @media (max-width: 820px) {
