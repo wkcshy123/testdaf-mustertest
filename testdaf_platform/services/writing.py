@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import dashscope
+<<<<<<< HEAD
+from dashscope import Generation
+=======
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
 
@@ -43,11 +47,19 @@ class WritingAufgabe1Generator:
         return payload
 
     def _call_generation(self, api_key: str, data: WritingAufgabe1Input) -> dict:
+<<<<<<< HEAD
+        resp = Generation.call(
+            model=self.model,
+            api_key=api_key,
+            messages=[{"role": "user", "content": self._user_prompt(data)}],
+            max_tokens=8000,
+=======
         content = self._build_multimodal_content(data)
         resp = dashscope.MultiModalConversation.call(
             model=self.model,
             api_key=api_key,
             messages=[{"role": "user", "content": content}],
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         )
         if resp.status_code != 200:
             raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
@@ -57,6 +69,12 @@ class WritingAufgabe1Generator:
             raise RuntimeError("API 未返回写作题内容")
         return self._parse_json(text)
 
+<<<<<<< HEAD
+    def _extract_text(self, response: object) -> str:
+        content = response.output.text
+        if isinstance(content, str):
+            return content.strip()
+=======
     def _build_multimodal_content(self, data: WritingAufgabe1Input) -> list[dict]:
         content: list[dict] = []
         for path in data.reference_image_paths:
@@ -75,6 +93,7 @@ class WritingAufgabe1Generator:
                 if isinstance(item, dict) and "text" in item:
                     parts.append(str(item["text"]))
             return "\n".join(parts).strip()
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         return str(content).strip()
 
     def _parse_json(self, content: str) -> dict:
@@ -215,10 +234,26 @@ class ChartRenderer:
             return self._render_pie(spec)
         return self._render_bar(spec)
 
+<<<<<<< HEAD
+    def _calc_title_layout(self, spec: dict, width: int) -> tuple[list[str], int, int]:
+        """计算标题的布局：返回 (标题行, 标题区域高度, 图表起始 top)."""
+        title_lines = _wrap_text(spec.get("title", "Grafik"), max_width=width - 80, font_size=22)
+        title_font_size = 22 if len(title_lines) == 1 else 20
+        title_area_height = 30 + len(title_lines) * (title_font_size + 6)
+        chart_top = title_area_height + 10
+        return title_lines, title_font_size, chart_top
+
+    def _render_bar(self, spec: dict) -> str:
+        data = spec["data"]
+        width, height = 820, 460
+        title_lines, title_font_size, top = self._calc_title_layout(spec, width)
+        left, bottom = 80, 90
+=======
     def _render_bar(self, spec: dict) -> str:
         data = spec["data"]
         width, height = 820, 460
         left, top, bottom = 80, 74, 90
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         chart_width = width - left - 40
         chart_height = height - top - bottom
         max_value = max(float(item["value"]) for item in data) or 1
@@ -235,12 +270,21 @@ class ChartRenderer:
                 f'<text x="{x + bar_width / 2:.1f}" y="{height - 52}" text-anchor="middle" font-size="15">{_esc(item["label"])}</text>'
                 f'<text x="{x + bar_width / 2:.1f}" y="{y - 8:.1f}" text-anchor="middle" font-size="14" fill="#1e2528">{value:g}</text>'
             )
+<<<<<<< HEAD
+        return self._svg_shell(spec, width, height, "".join(bars), y_axis=True, top=top, title_lines=title_lines, title_font_size=title_font_size)
+=======
         return self._svg_shell(spec, width, height, "".join(bars), y_axis=True)
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
 
     def _render_line(self, spec: dict) -> str:
         data = spec["data"]
         width, height = 820, 460
+<<<<<<< HEAD
+        title_lines, title_font_size, top = self._calc_title_layout(spec, width)
+        left, bottom = 80, 90
+=======
         left, top, bottom = 80, 74, 90
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         chart_width = width - left - 40
         chart_height = height - top - bottom
         max_value = max(float(item["value"]) for item in data) or 1
@@ -262,17 +306,33 @@ class ChartRenderer:
             for x, y, value in points
         )
         body = f'<polyline points="{polyline}" fill="none" stroke="#175c54" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>{dots}{"".join(labels)}'
+<<<<<<< HEAD
+        return self._svg_shell(spec, width, height, body, y_axis=True, top=top, title_lines=title_lines, title_font_size=title_font_size)
+=======
         return self._svg_shell(spec, width, height, body, y_axis=True)
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
 
     def _render_pie(self, spec: dict) -> str:
         data = spec["data"]
         width, height = 820, 460
+<<<<<<< HEAD
+        title_lines, title_font_size, chart_top = self._calc_title_layout(spec, width)
+        bottom = 90
+        chart_height = height - chart_top - bottom
+        cy = chart_top + chart_height / 2
+        cx, radius = 270, 130
+=======
         cx, cy, radius = 270, 250, 130
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         total = sum(float(item["value"]) for item in data) or 1
         colors = ["#175c54", "#c18f35", "#8b5e3c", "#487b74", "#d7a84f", "#6d7b88", "#9c6b7d"]
         start = -math.pi / 2
         slices = []
         legend = []
+<<<<<<< HEAD
+        legend_start_y = chart_top + 20
+=======
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
         for index, item in enumerate(data):
             value = float(item["value"])
             angle = value / total * math.tau
@@ -284,12 +344,36 @@ class ChartRenderer:
             slices.append(
                 f'<path d="M {cx} {cy} L {x1:.1f} {y1:.1f} A {radius} {radius} 0 {large} 1 {x2:.1f} {y2:.1f} Z" fill="{color}"/>'
             )
+<<<<<<< HEAD
+            legend_y = legend_start_y + index * 32
+=======
             legend_y = 140 + index * 32
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
             legend.append(
                 f'<rect x="500" y="{legend_y - 14}" width="18" height="18" rx="4" fill="{color}"/>'
                 f'<text x="530" y="{legend_y}" font-size="16">{_esc(item["label"])}: {value:g}{_esc(spec.get("unit", ""))}</text>'
             )
             start = end
+<<<<<<< HEAD
+        return self._svg_shell(spec, width, height, "".join(slices + legend), y_axis=False, top=chart_top, title_lines=title_lines, title_font_size=title_font_size)
+
+    def _svg_shell(self, spec: dict, width: int, height: int, body: str, *, y_axis: bool, top: int, title_lines: list[str], title_font_size: int) -> str:
+        axis = ""
+        if y_axis:
+            chart_bottom = top + (height - top - 90)
+            axis = (
+                f'<line x1="80" y1="{top}" x2="80" y2="{chart_bottom}" stroke="#70777a" stroke-width="2"/>'
+                f'<line x1="80" y1="{chart_bottom}" x2="780" y2="{chart_bottom}" stroke="#70777a" stroke-width="2"/>'
+            )
+        title_svg = "".join(
+            f'<text x="40" y="{30 + idx * (title_font_size + 6) + title_font_size}" font-size="{title_font_size}" font-weight="700" fill="#1e2528">{_esc(line)}</text>'
+            for idx, line in enumerate(title_lines)
+        )
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
+            '<rect width="100%" height="100%" rx="22" fill="#fffaf0"/>'
+            f"{title_svg}"
+=======
         return self._svg_shell(spec, width, height, "".join(slices + legend), y_axis=False)
 
     def _svg_shell(self, spec: dict, width: int, height: int, body: str, *, y_axis: bool) -> str:
@@ -303,6 +387,7 @@ class ChartRenderer:
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
             '<rect width="100%" height="100%" rx="22" fill="#fffaf0"/>'
             f'<text x="40" y="42" font-size="24" font-weight="700" fill="#1e2528">{_esc(spec.get("title", "Grafik"))}</text>'
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
             f'<text x="40" y="{height - 18}" font-size="13" fill="#70777a">{_esc(spec.get("source_note", ""))}</text>'
             f'<text x="{width - 40}" y="{height - 18}" text-anchor="end" font-size="13" fill="#70777a">Einheit: {_esc(spec.get("unit", ""))}</text>'
             f"{axis}{body}</svg>"
@@ -311,3 +396,37 @@ class ChartRenderer:
 
 def _esc(value: object) -> str:
     return html.escape(str(value), quote=True)
+<<<<<<< HEAD
+
+
+def _wrap_text(text: str, *, max_width: int, font_size: int) -> list[str]:
+    """按空格/逗号/分号等位置将长文本拆分为多行，确保每行不超过 max_width 像素。"""
+    text = str(text).strip()
+    if not text:
+        return [""]
+    avg_char_width = font_size * 0.6
+    tokens = re.split(r"(\s+)", text)
+    lines: list[str] = []
+    current = ""
+    for token in tokens:
+        if not token.strip():
+            current += token
+            continue
+        candidate = (current.rstrip() + " " + token).strip() if current.strip() else token
+        if len(candidate) * avg_char_width <= max_width:
+            current = candidate if not current.strip() else (current.rstrip() + " " + token)
+        else:
+            if current.strip():
+                lines.append(current.strip())
+            if len(token) * avg_char_width > max_width:
+                chars_per_line = max(1, int(max_width / avg_char_width))
+                for i in range(0, len(token), chars_per_line):
+                    lines.append(token[i : i + chars_per_line])
+                current = ""
+            else:
+                current = token
+    if current.strip():
+        lines.append(current.strip())
+    return lines or [""]
+=======
+>>>>>>> b39de2c7c86c356bc1c9bb4a48d82a1a870b6676
