@@ -315,6 +315,7 @@ class QuestionBank:
                 "question_count": 10,
                 "answer_mode": "matching",
                 "length_metadata": generation.get("length_metadata"),
+                "example_offer_label": generation.get("example_offer_label"),
             },
             assets={
                 "texts": "texts.json",
@@ -633,16 +634,34 @@ class QuestionBank:
     def trash_dir(self) -> Path:
         return self.root / ".trash"
 
+    def _resolve_inside(self, base: Path, relative_path: str, error_message: str) -> Path:
+        if not relative_path:
+            raise RuntimeError(error_message)
+        base_path = base.resolve()
+        candidate = (base / relative_path).resolve()
+        try:
+            candidate.relative_to(base_path)
+        except ValueError as exc:
+            raise RuntimeError(error_message) from exc
+        return candidate
+
+    def _resolve_question_path(self, relative_path: str) -> Path:
+        return self._resolve_inside(self.root, relative_path, "题目路径非法")
+
+    def _resolve_trash_path(self, relative_path: str) -> Path:
+        return self._resolve_inside(self.trash_dir, relative_path, "垃圾箱路径非法")
+
     def move_to_trash(self, relative_path: str) -> None:
-        src = self.root / relative_path
+        src = self._resolve_question_path(relative_path)
         if not src.exists():
             raise RuntimeError("题目不存在")
-        section = Path(relative_path).parts[0] if Path(relative_path).parts else ""
-        trash_target = self.trash_dir / relative_path
+        normalized_path = src.relative_to(self.root.resolve()).as_posix()
+        section = Path(normalized_path).parts[0] if Path(normalized_path).parts else ""
+        trash_target = self._resolve_trash_path(normalized_path)
         trash_target.parent.mkdir(parents=True, exist_ok=True)
         trash_info = {
             "deleted_at": datetime.now(timezone.utc).isoformat(),
-            "original_path": relative_path,
+            "original_path": normalized_path,
             "section": section,
         }
         with (src / "manifest.json").open("r", encoding="utf-8") as f:
@@ -657,7 +676,7 @@ class QuestionBank:
             json.dump(trash_info, f, ensure_ascii=False, indent=2)
 
     def restore_from_trash(self, trash_relative_path: str) -> None:
-        src = self.trash_dir / trash_relative_path
+        src = self._resolve_trash_path(trash_relative_path)
         if not src.exists():
             raise RuntimeError("垃圾箱中未找到该题目")
         info_path = src / ".trash_info.json"
@@ -668,7 +687,7 @@ class QuestionBank:
         original_path = trash_info.get("original_path", "")
         if not original_path:
             raise RuntimeError("无法确定原始位置")
-        target = self.root / original_path
+        target = self._resolve_question_path(original_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             shutil.rmtree(str(target))
@@ -707,7 +726,7 @@ class QuestionBank:
                 pass
 
     def rename_question(self, relative_path: str, new_title: str) -> None:
-        question_dir = self.root / relative_path
+        question_dir = self._resolve_question_path(relative_path)
         if not question_dir.exists():
             raise RuntimeError("题目不存在")
         manifest_path = question_dir / "manifest.json"
@@ -725,12 +744,13 @@ class QuestionBank:
         return self.root / section / task_type / question_id
 
     def load_question_bundle(self, relative_path: str) -> dict:
-        question_dir = self.root / relative_path
+        question_dir = self._resolve_question_path(relative_path)
         manifest_path = question_dir / "manifest.json"
         with manifest_path.open("r", encoding="utf-8") as file:
             manifest = json.load(file)
 
-        bundle = {"manifest": manifest, "path": relative_path}
+        normalized_path = question_dir.relative_to(self.root.resolve()).as_posix()
+        bundle = {"manifest": manifest, "path": normalized_path}
         for key in (
             "transcript",
             "segments",
@@ -749,7 +769,11 @@ class QuestionBank:
             asset = manifest.get("assets", {}).get(key)
             if not asset:
                 continue
-            asset_path = question_dir / asset
+            asset_path = (question_dir / asset).resolve()
+            try:
+                asset_path.relative_to(question_dir.resolve())
+            except ValueError as exc:
+                raise RuntimeError("题目资源路径非法") from exc
             if asset_path.suffix == ".json":
                 with asset_path.open("r", encoding="utf-8") as file:
                     bundle[key] = json.load(file)

@@ -17,8 +17,13 @@ DOWNLOADS_DIR = PROJECT_ROOT / "downloads"
 
 _ARIAL_TTF = Path("C:/Windows/Fonts/arial.ttf")
 _ARIALBD_TTF = Path("C:/Windows/Fonts/arialbd.ttf")
-_TIMES_TTF = Path("C:/Windows/Fonts/times.ttf")
-_TIMESBD_TTF = Path("C:/Windows/Fonts/timesbd.ttf")
+_FONT_CANDIDATES = [
+    (_ARIAL_TTF, _ARIALBD_TTF),
+    (Path("/System/Library/Fonts/Supplemental/Arial.ttf"), Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")),
+    (Path("/Library/Fonts/Arial.ttf"), Path("/Library/Fonts/Arial Bold.ttf")),
+    (Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")),
+    (Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"), Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")),
+]
 
 _SECTION_LABELS = {
     "listening": "Hörverstehen",
@@ -38,6 +43,31 @@ def safe_filename(title: str, max_len: int = 50) -> str:
     if len(result) > max_len:
         result = result[:max_len].rstrip("_")
     return result if result else name[:max_len]
+
+
+def _first_existing_font() -> tuple[Path, Path] | None:
+    for regular, bold in _FONT_CANDIDATES:
+        if regular.exists():
+            return regular, bold if bold.exists() else regular
+    return None
+
+
+def _latin_safe(value: object) -> str:
+    replacements = {
+        "—": "-",
+        "–": "-",
+        "‑": "-",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "’": "'",
+        "‘": "'",
+        "…": "...",
+    }
+    text = str(value)
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text.encode("latin-1", "replace").decode("latin-1")
 
 
 class ExportService:
@@ -112,6 +142,7 @@ class ExportService:
         manifest = bundle["manifest"]
         profiles = bundle.get("profiles", [])
         offers = bundle.get("texts", [])
+        example_label = manifest.get("parameters", {}).get("example_offer_label")
         scenario = _extract_scenario(bundle, "reading", "aufgabe_1")
 
         doc.add_heading("Aufgabenstellung", level=2)
@@ -131,11 +162,12 @@ class ExportService:
 
         doc.add_page_break()
         doc.add_heading("Texte A – H", level=2)
-        for offer in offers:
+        for offer in _practice_offers(offers, example_label):
             heading = f"{offer['label']}.  {offer.get('heading', '')}"
             p = doc.add_paragraph()
             p.add_run(heading).bold = True
             doc.add_paragraph(offer.get("text", ""))
+        _docx_add_example_offer(doc, offers, example_label)
 
     def _docx_reading_a2(self, doc, bundle: dict) -> None:
         reading_text = bundle.get("reading_text", "")
@@ -198,8 +230,10 @@ class ExportService:
             self._pdf_reading_a3(pdf, bundle)
 
     def _pdf_reading_a1(self, pdf: "_PdfBuilder", bundle: dict) -> None:
+        manifest = bundle["manifest"]
         profiles = bundle.get("profiles", [])
         offers = bundle.get("texts", [])
+        example_label = manifest.get("parameters", {}).get("example_offer_label")
         scenario = _extract_scenario(bundle, "reading", "aufgabe_1")
         pdf.add_heading("Aufgabenstellung")
         pdf.add_text(scenario or "Schreiben Sie den jeweiligen Buchstaben (A–H).")
@@ -210,10 +244,11 @@ class ExportService:
             pdf.ln(1)
         pdf.add_page()
         pdf.add_heading("Texte A – H")
-        for offer in offers:
+        for offer in _practice_offers(offers, example_label):
             pdf.add_subheading(f"{offer['label']}.  {offer.get('heading', '')}")
             pdf.add_text(offer.get("text", ""))
             pdf.ln(3)
+        _pdf_add_example_offer(pdf, offers, example_label)
 
     def _pdf_reading_a2(self, pdf: "_PdfBuilder", bundle: dict) -> None:
         paragraphs_list = bundle.get("paragraphs", [])
@@ -302,6 +337,7 @@ class ExportService:
         doc.add_heading("Bearbeiten Sie die folgenden Punkte:", level=2)
         for instr in instructions:
             doc.add_paragraph(instr, style="List Number")
+        _docx_add_chart_specs(doc, bundle.get("charts", []))
 
     def _pdf_writing(self, pdf: "_PdfBuilder", bundle: dict) -> None:
         prompt_data = bundle.get("prompt", {})
@@ -317,6 +353,7 @@ class ExportService:
         pdf.add_heading("Bearbeiten Sie die folgenden Punkte:")
         for instr in instructions:
             pdf.add_text(f"- {instr}")
+        _pdf_add_chart_specs(pdf, bundle.get("charts", []))
 
     # ── Speaking ──────────────────────────────────────────────
 
@@ -358,6 +395,7 @@ class ExportService:
             doc.add_heading("Gesprächsimpuls", level=3)
             p = doc.add_paragraph()
             p.add_run(f"„{examiner_intro}“").italic = True
+        _docx_add_chart_specs(doc, task.get("chart_specs", []))
 
     def _pdf_speaking(self, pdf: "_PdfBuilder", bundle: dict) -> None:
         manifest = bundle.get("manifest", {})
@@ -394,9 +432,90 @@ class ExportService:
         pdf.add_subheading("Ihre Aufgabe")
         for point in points:
             pdf.add_text(f"- {point}")
+        _pdf_add_chart_specs(pdf, task.get("chart_specs", []))
 
 
 # ── helpers ──────────────────────────────────────────────────
+
+def _practice_offers(offers: list[dict], example_label: str | None) -> list[dict]:
+    if not example_label:
+        return offers
+    return [offer for offer in offers if offer.get("label") != example_label]
+
+
+def _find_offer(offers: list[dict], label: str | None) -> dict | None:
+    if not label:
+        return None
+    return next((offer for offer in offers if offer.get("label") == label), None)
+
+
+def _docx_add_example_offer(doc, offers: list[dict], example_label: str | None) -> None:
+    example = _find_offer(offers, example_label)
+    if not example:
+        return
+    doc.add_page_break()
+    doc.add_heading(f"Beispieltext {example_label}", level=2)
+    p = doc.add_paragraph()
+    p.add_run(f"{example['label']}.  {example.get('heading', '')}").bold = True
+    doc.add_paragraph(example.get("text", ""))
+
+
+def _pdf_add_example_offer(pdf: "_PdfBuilder", offers: list[dict], example_label: str | None) -> None:
+    example = _find_offer(offers, example_label)
+    if not example:
+        return
+    pdf.add_page()
+    pdf.add_heading(f"Beispieltext {example_label}")
+    pdf.add_subheading(f"{example['label']}.  {example.get('heading', '')}")
+    pdf.add_text(example.get("text", ""))
+
+
+def _docx_add_chart_specs(doc, chart_specs: list[dict]) -> None:
+    if not chart_specs:
+        return
+    doc.add_heading("Grafiken", level=2)
+    for index, chart in enumerate(chart_specs, start=1):
+        doc.add_heading(f"Grafik {index}: {chart.get('title', 'Grafik')}", level=3)
+        meta = []
+        if chart.get("unit"):
+            meta.append(f"Einheit: {chart['unit']}")
+        if chart.get("source_note"):
+            meta.append(str(chart["source_note"]))
+        if meta:
+            doc.add_paragraph(" · ".join(meta))
+        data = chart.get("data", [])
+        if data:
+            table = doc.add_table(rows=1, cols=2)
+            table.style = "Table Grid"
+            table.rows[0].cells[0].text = "Label"
+            table.rows[0].cells[1].text = "Wert"
+            for item in data:
+                row = table.add_row()
+                row.cells[0].text = str(item.get("label", ""))
+                row.cells[1].text = str(item.get("value", ""))
+
+
+def _pdf_add_chart_specs(pdf: "_PdfBuilder", chart_specs: list[dict]) -> None:
+    if not chart_specs:
+        return
+    pdf.add_heading("Grafiken")
+    for index, chart in enumerate(chart_specs, start=1):
+        pdf.add_subheading(f"Grafik {index}: {chart.get('title', 'Grafik')}")
+        meta = []
+        if chart.get("unit"):
+            meta.append(f"Einheit: {chart['unit']}")
+        if chart.get("source_note"):
+            meta.append(str(chart["source_note"]))
+        if meta:
+            pdf.add_text(" · ".join(meta))
+            pdf.ln(1)
+        data = chart.get("data", [])
+        if data:
+            pdf.add_table_row([90, 35], ["Label", "Wert"], bold=True)
+            for item in data:
+                pdf.add_table_row([90, 35], [str(item.get("label", ""))[:60], str(item.get("value", ""))])
+            pdf.ln(3)
+
 
 def _extract_scenario(bundle: dict, section: str, task_type: str) -> str:
     preview = bundle.get("preview", "")
@@ -445,44 +564,51 @@ class _PdfBuilder:
         self._init_fonts()
 
     def _init_fonts(self) -> None:
-        if _ARIAL_TTF.exists():
-            self.pdf.add_font("F0", "", str(_ARIAL_TTF))
-            self.pdf.add_font("F0", "B", str(_ARIALBD_TTF) if _ARIALBD_TTF.exists() else str(_ARIAL_TTF))
+        font_pair = _first_existing_font()
+        self.uses_unicode_font = font_pair is not None
+        if font_pair:
+            regular, bold = font_pair
+            self.pdf.add_font("F0", "", str(regular))
+            self.pdf.add_font("F0", "B", str(bold))
             self.font = "F0"
             self.font_bold = "F0"
         else:
             self.font = "Helvetica"
             self.font_bold = "Helvetica"
 
+    def _text(self, value: object) -> str:
+        text = str(value)
+        return text if self.uses_unicode_font else _latin_safe(text)
+
     def add_header(self, section: str, task_type: str) -> None:
         label = task_type.replace("_", " ").title()
         self.pdf.set_font(self.font_bold, size=16)
-        self.pdf.cell(0, 12, f"{section}  —  {label}", ln=True, align="C")
+        self.pdf.cell(0, 12, self._text(f"{section}  —  {label}"), ln=True, align="C")
         self.pdf.ln(6)
 
     def add_heading(self, text: str) -> None:
         self.pdf.set_font(self.font_bold, size=13)
-        self.pdf.cell(0, 9, text, ln=True)
+        self.pdf.cell(0, 9, self._text(text), ln=True)
         self.pdf.ln(3)
 
     def add_subheading(self, text: str) -> None:
         self.pdf.set_font(self.font_bold, size=10.5)
-        self.pdf.cell(0, 7, text, ln=True)
+        self.pdf.cell(0, 7, self._text(text), ln=True)
         self.pdf.ln(1)
 
     def add_text(self, text: str) -> None:
         self.pdf.set_font(self.font, size=10)
-        self.pdf.multi_cell(self.pdf.epw, 5.2, text)
+        self.pdf.multi_cell(self.pdf.epw, 5.2, self._text(text))
 
     def add_bold(self, text: str) -> None:
         self.pdf.set_font(self.font_bold, size=10)
-        self.pdf.multi_cell(self.pdf.epw, 5.2, text)
+        self.pdf.multi_cell(self.pdf.epw, 5.2, self._text(text))
 
     def add_table_row(self, col_widths: list, values: list[str], bold: bool = False) -> None:
         font = self.font_bold if bold else self.font
         self.pdf.set_font(font, size=9)
         for i, val in enumerate(values):
-            self.pdf.cell(col_widths[i], 7, val, border=1)
+            self.pdf.cell(col_widths[i], 7, self._text(val), border=1)
         self.pdf.ln()
 
     def add_page(self) -> None:
