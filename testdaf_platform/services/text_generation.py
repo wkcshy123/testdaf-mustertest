@@ -1,11 +1,80 @@
-"""Qwen 文本生成服务。"""
+"""Unified Qwen text generation client."""
 
 import dashscope
-from dashscope import Generation
+from dashscope import Generation, MultiModalConversation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
+
+
+MULTIMODAL_TEXT_MODEL_PREFIXES = ("qwen3.7", "qwen3.6", "qwen3.5")
+
+
+class TextGenerationClient:
+    """Route text generation requests to the correct DashScope API."""
+
+    def __init__(self, model: str = QWEN_TEXT_MODEL, base_url: str = DASHSCOPE_BASE_URL):
+        self.model = model
+        self.base_url = base_url
+
+    def generate_text(
+        self,
+        *,
+        api_key: str,
+        messages: list[dict],
+        max_tokens: int | None = None,
+    ) -> str:
+        dashscope.base_http_api_url = self.base_url
+        if self.uses_multimodal_api(self.model):
+            response = MultiModalConversation.call(
+                model=self.model,
+                api_key=api_key,
+                messages=self._to_multimodal_messages(messages),
+                max_tokens=max_tokens,
+            )
+            text = self._extract_multimodal_text(response)
+        else:
+            response = Generation.call(
+                model=self.model,
+                api_key=api_key,
+                messages=messages,
+                max_tokens=max_tokens,
+            )
+            text = getattr(getattr(response, "output", None), "text", "") or ""
+
+        if response.status_code != 200:
+            raise RuntimeError(f"API 错误 {response.status_code}: {response.message or response.code}")
+        if not text:
+            raise RuntimeError("API 未返回文本")
+        return text.strip()
+
+    @staticmethod
+    def uses_multimodal_api(model: str) -> bool:
+        normalized = model.lower()
+        return normalized.startswith(MULTIMODAL_TEXT_MODEL_PREFIXES)
+
+    def _to_multimodal_messages(self, messages: list[dict]) -> list[dict]:
+        converted = []
+        for message in messages:
+            content = message.get("content", "")
+            if isinstance(content, str):
+                content = [{"text": content}]
+            converted.append({**message, "content": content})
+        return converted
+
+    def _extract_multimodal_text(self, response: object) -> str:
+        message = response.output.choices[0].message
+        content = message.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and "text" in item:
+                    parts.append(str(item["text"]))
+            return "\n".join(parts).strip()
+        return str(content).strip()
 
 
 class TextGenerationService:
@@ -13,10 +82,10 @@ class TextGenerationService:
 
     def __init__(self, model: str = QWEN_TEXT_MODEL):
         self.model = model
+        self.client = TextGenerationClient(model=model)
 
     def generate_german_story(self, api_key: str, summary: str) -> str:
-        resp = Generation.call(
-            model=self.model,
+        return self.client.generate_text(
             api_key=api_key,
             messages=[
                 {
@@ -34,12 +103,3 @@ class TextGenerationService:
             ],
             max_tokens=800,
         )
-
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-
-        text = resp.output.text
-        if not text:
-            raise RuntimeError("API 未返回文本")
-        return text.strip()
-

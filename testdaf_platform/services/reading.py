@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 
 import dashscope
-from dashscope import Generation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
+from testdaf_platform.services.text_generation import TextGenerationClient
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
@@ -64,10 +64,10 @@ class BaseReadingGenerator:
 
     def __init__(self, model: str = QWEN_TEXT_MODEL):
         self.model = model
+        self.client = TextGenerationClient(model=model)
 
     def _call_generation(self, api_key: str, system_prompt: str, user_prompt: str, max_tokens: int) -> dict:
-        resp = Generation.call(
-            model=self.model,
+        content = self.client.generate_text(
             api_key=api_key,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -75,11 +75,6 @@ class BaseReadingGenerator:
             ],
             max_tokens=max_tokens,
         )
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-        content = resp.output.text
-        if not content:
-            raise RuntimeError("API 未返回阅读题内容")
         return self._parse_json(content)
 
     def _parse_json(self, content: str) -> dict:

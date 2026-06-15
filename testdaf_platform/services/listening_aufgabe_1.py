@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 
 import dashscope
-from dashscope import Generation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
+from testdaf_platform.services.text_generation import TextGenerationClient
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
@@ -43,6 +43,7 @@ class ListeningAufgabe1Generator:
 
     def __init__(self, model: str = QWEN_TEXT_MODEL):
         self.model = model
+        self.client = TextGenerationClient(model=model)
 
     def generate(self, api_key: str, data: ListeningAufgabe1Input) -> dict:
         payload = self._normalize_payload(self._generate_initial_payload(api_key, data))
@@ -80,8 +81,7 @@ class ListeningAufgabe1Generator:
         raise RuntimeError("听力题生成失败：超过最大篇幅修复次数")
 
     def _generate_initial_payload(self, api_key: str, data: ListeningAufgabe1Input) -> dict:
-        resp = Generation.call(
-            model=self.model,
+        content = self.client.generate_text(
             api_key=api_key,
             messages=[
                 {
@@ -96,13 +96,6 @@ class ListeningAufgabe1Generator:
             max_tokens=6000,
         )
 
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-
-        content = resp.output.text
-        if not content:
-            raise RuntimeError("API 未返回听力题内容")
-
         return self._parse_json(content)
 
     def _expand_segments(
@@ -115,8 +108,7 @@ class ListeningAufgabe1Generator:
         attempt: int,
     ) -> dict:
         missing_bytes = TARGET_TRANSCRIPT_BYTES - current_bytes
-        resp = Generation.call(
-            model=self.model,
+        content = self.client.generate_text(
             api_key=api_key,
             messages=[
                 {
@@ -137,13 +129,6 @@ class ListeningAufgabe1Generator:
             max_tokens=2500,
         )
 
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-
-        content = resp.output.text
-        if not content:
-            raise RuntimeError("API 未返回扩写片段")
-
         repair = self._parse_json(content)
         new_segments = self._extract_repair_segments(repair)
         insert_after = int(repair.get("insert_after_index", max(len(payload["segments"]) - 1, 1)))
@@ -160,8 +145,7 @@ class ListeningAufgabe1Generator:
     ) -> dict:
         excess_bytes = current_bytes - TARGET_TRANSCRIPT_BYTES
         candidates = self._compression_candidates(payload)
-        resp = Generation.call(
-            model=self.model,
+        content = self.client.generate_text(
             api_key=api_key,
             messages=[
                 {
@@ -182,13 +166,6 @@ class ListeningAufgabe1Generator:
             ],
             max_tokens=2500,
         )
-
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-
-        content = resp.output.text
-        if not content:
-            raise RuntimeError("API 未返回压缩片段")
 
         repair = self._parse_json(content)
         replacements = self._extract_repair_segments(repair)

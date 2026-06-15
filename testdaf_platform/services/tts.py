@@ -10,6 +10,9 @@ from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TTS_MODEL
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
+AUDIO_DOWNLOAD_TIMEOUT_SECONDS = 180
+AUDIO_DOWNLOAD_RETRIES = 3
+
 
 @dataclass(frozen=True)
 class TTSResult:
@@ -48,8 +51,7 @@ class TTSService:
         if not audio_url:
             raise RuntimeError("API 未返回音频 URL")
 
-        download = requests.get(audio_url, timeout=60)
-        download.raise_for_status()
+        download = self._download_audio(audio_url)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_bytes(download.content)
@@ -60,3 +62,15 @@ class TTSService:
             audio_url=audio_url,
         )
 
+    def _download_audio(self, audio_url: str) -> requests.Response:
+        last_error: Exception | None = None
+        for attempt in range(1, AUDIO_DOWNLOAD_RETRIES + 1):
+            try:
+                response = requests.get(audio_url, timeout=AUDIO_DOWNLOAD_TIMEOUT_SECONDS)
+                response.raise_for_status()
+                return response
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt == AUDIO_DOWNLOAD_RETRIES:
+                    break
+        raise RuntimeError(f"下载 TTS 音频失败，已重试 {AUDIO_DOWNLOAD_RETRIES} 次：{last_error}") from last_error

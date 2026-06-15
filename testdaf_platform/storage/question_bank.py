@@ -94,10 +94,8 @@ class QuestionBank:
         questions = generation["questions"]
 
         (question_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
-        with (question_dir / "segments.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["segments"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(questions, file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "segments.json", generation["segments"])
+        self._write_json(question_dir / "questions.json", questions)
 
         preview_markdown = self._build_preview_markdown(generation, speaker_voice_map)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
@@ -160,12 +158,9 @@ class QuestionBank:
         statements = generation["statements"]
 
         (question_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
-        with (question_dir / "segments.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["segments"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "statements.json").open("w", encoding="utf-8") as file:
-            json.dump(statements, file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(statements, file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "segments.json", generation["segments"])
+        self._write_json(question_dir / "statements.json", statements)
+        self._write_json(question_dir / "questions.json", statements)
 
         preview_markdown = self._build_aufgabe_2_preview_markdown(generation, speaker_voice_map)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
@@ -231,10 +226,8 @@ class QuestionBank:
         questions = generation["questions"]
 
         (question_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
-        with (question_dir / "segments.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["segments"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(questions, file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "segments.json", generation["segments"])
+        self._write_json(question_dir / "questions.json", questions)
 
         preview_markdown = self._build_aufgabe_3_preview_markdown(generation, speaker_voice_map)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
@@ -291,12 +284,9 @@ class QuestionBank:
         self.ensure_layout()
         question_dir = self.get_question_dir("reading", "aufgabe_1", question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
-        with (question_dir / "texts.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["offers"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "profiles.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["profiles"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["answers"], file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "texts.json", generation["offers"])
+        self._write_json(question_dir / "profiles.json", generation["profiles"])
+        self._write_json(question_dir / "questions.json", generation["answers"])
         preview_markdown = self._build_reading_aufgabe_1_preview_markdown(generation)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
         manifest = QuestionManifest(
@@ -344,10 +334,8 @@ class QuestionBank:
         question_dir = self.get_question_dir("reading", "aufgabe_2", question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
         (question_dir / "reading_text.txt").write_text(generation["reading_text"].strip(), encoding="utf-8")
-        with (question_dir / "paragraphs.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["paragraphs"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["questions"], file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "paragraphs.json", generation["paragraphs"])
+        self._write_json(question_dir / "questions.json", generation["questions"])
         preview_markdown = self._build_reading_aufgabe_2_preview_markdown(generation)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
         manifest = QuestionManifest(
@@ -393,12 +381,9 @@ class QuestionBank:
         question_dir = self.get_question_dir("reading", "aufgabe_3", question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
         (question_dir / "reading_text.txt").write_text(generation["reading_text"].strip(), encoding="utf-8")
-        with (question_dir / "paragraphs.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["paragraphs"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "statements.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["statements"], file, ensure_ascii=False, indent=2)
-        with (question_dir / "questions.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["statements"], file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "paragraphs.json", generation["paragraphs"])
+        self._write_json(question_dir / "statements.json", generation["statements"])
+        self._write_json(question_dir / "questions.json", generation["statements"])
         preview_markdown = self._build_reading_aufgabe_3_preview_markdown(generation)
         (question_dir / "preview.md").write_text(preview_markdown, encoding="utf-8")
         manifest = QuestionManifest(
@@ -448,23 +433,19 @@ class QuestionBank:
         self.ensure_layout()
         question_dir = self.get_question_dir("writing", "aufgabe_1", question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
-        with (question_dir / "prompt.json").open("w", encoding="utf-8") as file:
-            json.dump(
-                {
-                    "title": generation["title"],
-                    "topic": generation["topic"],
-                    "background": generation["background"],
-                    "task_prompt": generation["task_prompt"],
-                    "writing_instructions": generation["writing_instructions"],
-                    "image_usage_note": generation.get("image_usage_note", ""),
-                    "length_metadata": generation.get("length_metadata"),
-                },
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-        with (question_dir / "charts.json").open("w", encoding="utf-8") as file:
-            json.dump(generation["chart_specs"], file, ensure_ascii=False, indent=2)
+        self._write_json(
+            question_dir / "prompt.json",
+            {
+                "title": generation["title"],
+                "topic": generation["topic"],
+                "background": generation["background"],
+                "task_prompt": generation["task_prompt"],
+                "writing_instructions": generation["writing_instructions"],
+                "image_usage_note": generation.get("image_usage_note", ""),
+                "length_metadata": generation.get("length_metadata"),
+            },
+        )
+        self._write_json(question_dir / "charts.json", generation["chart_specs"])
 
         relative_path = question_dir.relative_to(self.root)
         preview_markdown = self._build_writing_aufgabe_1_preview_markdown(
@@ -516,14 +497,12 @@ class QuestionBank:
         self.ensure_layout()
         question_dir = self.get_question_dir("speaking", "test_set", question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
-        with (question_dir / "tasks.json").open("w", encoding="utf-8") as file:
-            json.dump(tasks, file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "tasks.json", tasks)
 
         for task in tasks:
             task_dir = question_dir / f"task_{task['number']}"
             task_dir.mkdir(parents=True, exist_ok=True)
-            with (task_dir / "prompt.json").open("w", encoding="utf-8") as file:
-                json.dump(task, file, ensure_ascii=False, indent=2)
+            self._write_json(task_dir / "prompt.json", task)
 
         preview_markdown = self._build_speaking_test_set_preview_markdown(
             tasks,
@@ -574,10 +553,8 @@ class QuestionBank:
         task_type = f"aufgabe_{number}"
         question_dir = self.get_question_dir("speaking", task_type, question_id)
         question_dir.mkdir(parents=True, exist_ok=True)
-        with (question_dir / "prompt.json").open("w", encoding="utf-8") as file:
-            json.dump(generation, file, ensure_ascii=False, indent=2)
-        with (question_dir / "charts.json").open("w", encoding="utf-8") as file:
-            json.dump(generation.get("chart_specs", []), file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "prompt.json", generation)
+        self._write_json(question_dir / "charts.json", generation.get("chart_specs", []))
 
         preview_markdown = self._build_speaking_aufgabe_preview_markdown(
             generation,
@@ -672,8 +649,7 @@ class QuestionBank:
         if trash_target.exists():
             shutil.rmtree(str(trash_target))
         shutil.move(str(src), str(trash_target))
-        with (trash_target / ".trash_info.json").open("w", encoding="utf-8") as f:
-            json.dump(trash_info, f, ensure_ascii=False, indent=2)
+        self._write_json(trash_target / ".trash_info.json", trash_info)
 
     def restore_from_trash(self, trash_relative_path: str) -> None:
         src = self._resolve_trash_path(trash_relative_path)
@@ -690,7 +666,7 @@ class QuestionBank:
         target = self._resolve_question_path(original_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
-            shutil.rmtree(str(target))
+            raise RuntimeError("原始位置已有题目，请先处理冲突后再恢复")
         shutil.move(str(src), str(target))
         info_path = target / ".trash_info.json"
         if info_path.exists():
@@ -734,8 +710,7 @@ class QuestionBank:
             manifest = json.load(f)
         manifest["title"] = new_title.strip()
         manifest["updated_at"] = datetime.now().isoformat(timespec="seconds")
-        with manifest_path.open("w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        self._write_json(manifest_path, manifest)
 
     def new_question_id(self) -> str:
         return f"q_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
@@ -783,8 +758,18 @@ class QuestionBank:
 
     def _write_manifest(self, question_dir: Path, manifest: QuestionManifest) -> None:
         manifest_path = question_dir / "manifest.json"
-        with manifest_path.open("w", encoding="utf-8") as file:
-            json.dump(asdict(manifest), file, ensure_ascii=False, indent=2)
+        self._write_json(manifest_path, asdict(manifest))
+
+    def _write_json(self, path: Path, data: object) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        try:
+            with temp_path.open("w", encoding="utf-8") as file:
+                json.dump(data, file, ensure_ascii=False, indent=2)
+            temp_path.replace(path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
 
     def _write_reference_sources(
         self,
@@ -794,8 +779,7 @@ class QuestionBank:
     ) -> None:
         if not reference_sources:
             return
-        with (question_dir / "reference_sources.json").open("w", encoding="utf-8") as file:
-            json.dump(reference_sources, file, ensure_ascii=False, indent=2)
+        self._write_json(question_dir / "reference_sources.json", reference_sources)
         manifest.assets["reference_sources"] = "reference_sources.json"
 
     def _build_preview_markdown(self, generation: dict, speaker_voice_map: dict[str, str]) -> str:

@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from uuid import uuid4
 
 from docx import Document
 from docx.shared import Cm, Inches, Pt
@@ -88,6 +89,7 @@ class ExportService:
         section = manifest.get("section", "")
         task_type = manifest.get("task_type", "")
         title = manifest.get("title", "Export")
+        question_id = manifest.get("id", "")
 
         doc = Document()
         style = doc.styles["Normal"]
@@ -106,13 +108,14 @@ class ExportService:
         elif section == "speaking":
             self._docx_speaking(doc, bundle)
 
-        return _save_docx(doc, title)
+        return _save_docx(doc, title, question_id)
 
     def _export_pdf(self, bundle: dict) -> Path:
         manifest = bundle["manifest"]
         section = manifest.get("section", "")
         task_type = manifest.get("task_type", "")
         title = manifest.get("title", "Export")
+        question_id = manifest.get("id", "")
 
         pdf = _PdfBuilder()
         pdf.add_header(_SECTION_LABELS.get(section, section), task_type)
@@ -126,7 +129,7 @@ class ExportService:
         elif section == "speaking":
             self._pdf_speaking(pdf, bundle)
 
-        return _save_pdf(pdf, title)
+        return _save_pdf(pdf, title, question_id)
 
     # ── Reading ───────────────────────────────────────────────
 
@@ -530,20 +533,26 @@ def _extract_scenario(bundle: dict, section: str, task_type: str) -> str:
     return ""
 
 
-def _save_docx(doc: Document, title: str) -> Path:
+def _save_docx(doc: Document, title: str, question_id: str = "") -> Path:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{safe_filename(title)}.docx"
+    filename = _export_filename(title, "docx", question_id)
     path = DOWNLOADS_DIR / filename
     doc.save(str(path))
     return path
 
 
-def _save_pdf(pdf: "_PdfBuilder", title: str) -> Path:
+def _save_pdf(pdf: "_PdfBuilder", title: str, question_id: str = "") -> Path:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{safe_filename(title)}.pdf"
+    filename = _export_filename(title, "pdf", question_id)
     path = DOWNLOADS_DIR / filename
     pdf.output(str(path))
     return path
+
+
+def _export_filename(title: str, suffix: str, question_id: str = "") -> str:
+    safe_id = safe_filename(question_id, max_len=24) if question_id else "export"
+    unique = uuid4().hex[:8]
+    return f"{safe_filename(title)}_{safe_id}_{unique}.{suffix}"
 
 
 def _add_docx_header(doc: Document, section: str, task_type: str) -> None:

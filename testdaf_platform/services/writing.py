@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import dashscope
-from dashscope import Generation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
+from testdaf_platform.services.text_generation import TextGenerationClient
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
@@ -36,6 +36,7 @@ class WritingAufgabe1Generator:
 
     def __init__(self, model: str = QWEN_TEXT_MODEL):
         self.model = model
+        self.client = TextGenerationClient(model=model)
 
     def generate(self, api_key: str, data: WritingAufgabe1Input) -> dict:
         payload = self._call_generation(api_key, data)
@@ -53,13 +54,12 @@ class WritingAufgabe1Generator:
             )
             text = self._extract_multimodal_text(resp)
         else:
-            resp = Generation.call(
-                model=self.model,
+            text = self.client.generate_text(
                 api_key=api_key,
                 messages=[{"role": "user", "content": self._user_prompt(data)}],
                 max_tokens=6000,
             )
-            text = resp.output.text
+            return self._parse_json(text)
 
         if resp.status_code != 200:
             raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")

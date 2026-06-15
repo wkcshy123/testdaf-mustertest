@@ -9,6 +9,8 @@
   <p class="lead">按 TestDaF 四大模块组织题型。进入具体题型页后，可以填写主题、参考素材和题型参数，生成完整题目包并保存到本地题库。</p>
 </section>
 
+{% if error %}<div class="notice">{{ error }}</div>{% endif %}
+
 <section class="panel">
   <div class="panel-title">
     <h2>题库管理</h2>
