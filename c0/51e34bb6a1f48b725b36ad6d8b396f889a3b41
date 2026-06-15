@@ -1,0 +1,204 @@
+testdaf_platform/templates/teacher_speaking_test_set.html
+  s_0ef01f7ae9859d::t_eedaef9a81276d 76 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2fef54bde274d0462216b0","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":76}]}]}
+testdaf_platform/services/reading.py
+  s_0ef01f7ae9859d::t_2af4ee29bcc500 297-299 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2fef4abde274d046221697","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[297,299]}]}]}
+testdaf_platform/config.py
+  s_0ef01f7ae9859d::t_cc1eda8f9acfab 11 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2fef35bde274d046221666","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":11}]}]}
+testdaf_platform/services/speaking.py
+  s_0ef01f7ae9859d::t_f7c436b1b2b8be 97-98,106,195-201,216,228-230 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2fef3fbde274d04622167d","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[97,98]},{"Single":106},{"Range":[195,201]},{"Single":216},{"Range":[228,230]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c051e34bb6a1f48b725b36ad6d8b396f889a3b41",
+  "prompts": {},
+  "sessions": {
+    "s_0ef01f7ae9859d": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a2fe301bde274d0462212b0",
+        "model": "gpt-5.5__max"
+      },
+      "human_author": "wkcshy123 <zhufeng19960708@icloud.com>"
+    }
+  },
+  "attestation_metadata": {
+    "testdaf_platform/config.py": [
+      {
+        "hash": "s_0ef01f7ae9859d::t_cc1eda8f9acfab",
+        "line_ranges": [
+          {
+            "Single": 11
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2fef35bde274d046221666",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 11
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "testdaf_platform/services/reading.py": [
+      {
+        "hash": "s_0ef01f7ae9859d::t_2af4ee29bcc500",
+        "line_ranges": [
+          {
+            "Range": [
+              297,
+              299
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2fef4abde274d046221697",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  297,
+                  299
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "testdaf_platform/services/speaking.py": [
+      {
+        "hash": "s_0ef01f7ae9859d::t_f7c436b1b2b8be",
+        "line_ranges": [
+          {
+            "Range": [
+              97,
+              98
+            ]
+          },
+          {
+            "Single": 106
+          },
+          {
+            "Range": [
+              195,
+              201
+            ]
+          },
+          {
+            "Single": 216
+          },
+          {
+            "Range": [
+              228,
+              230
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2fef3fbde274d04622167d",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  97,
+                  98
+                ]
+              },
+              {
+                "Single": 106
+              },
+              {
+                "Range": [
+                  195,
+                  201
+                ]
+              },
+              {
+                "Single": 216
+              },
+              {
+                "Range": [
+                  228,
+                  230
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "testdaf_platform/templates/teacher_speaking_test_set.html": [
+      {
+        "hash": "s_0ef01f7ae9859d::t_eedaef9a81276d",
+        "line_ranges": [
+          {
+            "Single": 76
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2fef54bde274d0462216b0",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 76
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "s_0ef01f7ae9859d": {
+      "tool": "trae",
+      "conversation_id": "6a2fe301bde274d0462212b0",
+      "session_id": "6a2fe301bde274d0462212b0",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_0ef01f7ae9859d::t_2af4ee29bcc500": {
+      "tool": "trae",
+      "conversation_id": "6a2fe301bde274d0462212b0",
+      "session_id": "6a2fe301bde274d0462212b0",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_0ef01f7ae9859d::t_cc1eda8f9acfab": {
+      "tool": "trae",
+      "conversation_id": "6a2fe301bde274d0462212b0",
+      "session_id": "6a2fe301bde274d0462212b0",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_0ef01f7ae9859d::t_eedaef9a81276d": {
+      "tool": "trae",
+      "conversation_id": "6a2fe301bde274d0462212b0",
+      "session_id": "6a2fe301bde274d0462212b0",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_0ef01f7ae9859d::t_f7c436b1b2b8be": {
+      "tool": "trae",
+      "conversation_id": "6a2fe301bde274d0462212b0",
+      "session_id": "6a2fe301bde274d0462212b0",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
