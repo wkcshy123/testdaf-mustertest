@@ -1,6 +1,7 @@
 @echo off
 setlocal
 
+chcp 65001 >nul
 cd /d "%~dp0"
 
 echo TestDaF 模拟考试系统
@@ -30,6 +31,8 @@ echo 正在启动服务...
 echo 访问地址: http://127.0.0.1:8000/
 echo 如需停止服务，请在此窗口按 Ctrl+C。
 echo.
+
+start http://127.0.0.1:8000/
 
 uv run python main.py
 

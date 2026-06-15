@@ -8,7 +8,7 @@ CONFIG_FILE = Path.home() / ".german_tts_config.json"
 QUESTION_BANK_DIR = PROJECT_ROOT / "question_bank"
 
 QWEN_TTS_MODEL = "qwen3-tts-flash"
-QWEN_TEXT_MODEL = "qwen3.7-plus"
+QWEN_TEXT_MODEL = "qwen-plus"
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1"
 
 VOICES = [
