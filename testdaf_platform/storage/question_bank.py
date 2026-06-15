@@ -1,12 +1,15 @@
 """本地文件系统题库。"""
 
 import json
+import shutil
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from testdaf_platform.config import QUESTION_BANK_DIR
+
+TRASH_RETENTION_DAYS = 7
 
 
 @dataclass
@@ -312,6 +315,7 @@ class QuestionBank:
                 "question_count": 10,
                 "answer_mode": "matching",
                 "length_metadata": generation.get("length_metadata"),
+                "example_offer_label": generation.get("example_offer_label"),
             },
             assets={
                 "texts": "texts.json",
@@ -618,11 +622,120 @@ class QuestionBank:
         base = self.root / section if section else self.root
         manifests = []
         for manifest_path in sorted(base.glob("**/manifest.json"), reverse=True):
+            if ".trash" in str(manifest_path):
+                continue
             with manifest_path.open("r", encoding="utf-8") as file:
                 data = json.load(file)
             data["_path"] = str(manifest_path.parent.relative_to(self.root))
             manifests.append(data)
         return manifests
+
+    @property
+    def trash_dir(self) -> Path:
+        return self.root / ".trash"
+
+    def _resolve_inside(self, base: Path, relative_path: str, error_message: str) -> Path:
+        if not relative_path:
+            raise RuntimeError(error_message)
+        base_path = base.resolve()
+        candidate = (base / relative_path).resolve()
+        try:
+            candidate.relative_to(base_path)
+        except ValueError as exc:
+            raise RuntimeError(error_message) from exc
+        return candidate
+
+    def _resolve_question_path(self, relative_path: str) -> Path:
+        return self._resolve_inside(self.root, relative_path, "题目路径非法")
+
+    def _resolve_trash_path(self, relative_path: str) -> Path:
+        return self._resolve_inside(self.trash_dir, relative_path, "垃圾箱路径非法")
+
+    def move_to_trash(self, relative_path: str) -> None:
+        src = self._resolve_question_path(relative_path)
+        if not src.exists():
+            raise RuntimeError("题目不存在")
+        normalized_path = src.relative_to(self.root.resolve()).as_posix()
+        section = Path(normalized_path).parts[0] if Path(normalized_path).parts else ""
+        trash_target = self._resolve_trash_path(normalized_path)
+        trash_target.parent.mkdir(parents=True, exist_ok=True)
+        trash_info = {
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "original_path": normalized_path,
+            "section": section,
+        }
+        with (src / "manifest.json").open("r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        trash_info["title"] = manifest.get("title", "")
+        trash_info["task_type"] = manifest.get("task_type", "")
+        trash_target.parent.mkdir(parents=True, exist_ok=True)
+        if trash_target.exists():
+            shutil.rmtree(str(trash_target))
+        shutil.move(str(src), str(trash_target))
+        with (trash_target / ".trash_info.json").open("w", encoding="utf-8") as f:
+            json.dump(trash_info, f, ensure_ascii=False, indent=2)
+
+    def restore_from_trash(self, trash_relative_path: str) -> None:
+        src = self._resolve_trash_path(trash_relative_path)
+        if not src.exists():
+            raise RuntimeError("垃圾箱中未找到该题目")
+        info_path = src / ".trash_info.json"
+        if not info_path.exists():
+            raise RuntimeError("垃圾箱信息丢失")
+        with info_path.open("r", encoding="utf-8") as f:
+            trash_info = json.load(f)
+        original_path = trash_info.get("original_path", "")
+        if not original_path:
+            raise RuntimeError("无法确定原始位置")
+        target = self._resolve_question_path(original_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            shutil.rmtree(str(target))
+        shutil.move(str(src), str(target))
+        info_path = target / ".trash_info.json"
+        if info_path.exists():
+            info_path.unlink()
+
+    def list_trash(self) -> list[dict]:
+        self.cleanup_expired_trash()
+        if not self.trash_dir.exists():
+            return []
+        items = []
+        for info_path in sorted(self.trash_dir.glob("**/.trash_info.json"), reverse=True):
+            with info_path.open("r", encoding="utf-8") as f:
+                info = json.load(f)
+            info["_trash_path"] = str(info_path.parent.relative_to(self.trash_dir))
+            items.append(info)
+        return items
+
+    def cleanup_expired_trash(self) -> None:
+        if not self.trash_dir.exists():
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=TRASH_RETENTION_DAYS)
+        for info_path in list(self.trash_dir.glob("**/.trash_info.json")):
+            try:
+                with info_path.open("r", encoding="utf-8") as f:
+                    info = json.load(f)
+                deleted_str = info.get("deleted_at", "")
+                if not deleted_str:
+                    continue
+                deleted_at = datetime.fromisoformat(deleted_str)
+                if deleted_at < cutoff:
+                    shutil.rmtree(str(info_path.parent))
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+
+    def rename_question(self, relative_path: str, new_title: str) -> None:
+        question_dir = self._resolve_question_path(relative_path)
+        if not question_dir.exists():
+            raise RuntimeError("题目不存在")
+        manifest_path = question_dir / "manifest.json"
+        with manifest_path.open("r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        manifest["title"] = new_title.strip()
+        manifest["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        with manifest_path.open("w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     def new_question_id(self) -> str:
         return f"q_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
@@ -631,12 +744,13 @@ class QuestionBank:
         return self.root / section / task_type / question_id
 
     def load_question_bundle(self, relative_path: str) -> dict:
-        question_dir = self.root / relative_path
+        question_dir = self._resolve_question_path(relative_path)
         manifest_path = question_dir / "manifest.json"
         with manifest_path.open("r", encoding="utf-8") as file:
             manifest = json.load(file)
 
-        bundle = {"manifest": manifest, "path": relative_path}
+        normalized_path = question_dir.relative_to(self.root.resolve()).as_posix()
+        bundle = {"manifest": manifest, "path": normalized_path}
         for key in (
             "transcript",
             "segments",
@@ -655,7 +769,11 @@ class QuestionBank:
             asset = manifest.get("assets", {}).get(key)
             if not asset:
                 continue
-            asset_path = question_dir / asset
+            asset_path = (question_dir / asset).resolve()
+            try:
+                asset_path.relative_to(question_dir.resolve())
+            except ValueError as exc:
+                raise RuntimeError("题目资源路径非法") from exc
             if asset_path.suffix == ".json":
                 with asset_path.open("r", encoding="utf-8") as file:
                     bundle[key] = json.load(file)

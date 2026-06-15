@@ -164,6 +164,22 @@ h2 {
   background: rgba(23, 92, 84, 0.09);
 }
 
+.button.small {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.button.danger {
+  color: #fff;
+  background: #c0392b;
+}
+
+.button.danger:hover {
+  background: #a93226;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));

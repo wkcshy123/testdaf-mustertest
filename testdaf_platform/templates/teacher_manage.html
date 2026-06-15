@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section_label }} · 题库管理{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">题库管理</p>
+  <h1>{{ section_label }}</h1>
+  <p class="lead">共 {{ questions|length }} 条题目。可以排序、改名或删除题目。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+    <a class="button secondary" href="/teacher/manage/listening">听力题库</a>
+    <a class="button secondary" href="/teacher/manage/reading">阅读题库</a>
+    <a class="button secondary" href="/teacher/manage/writing">写作题库</a>
+    <a class="button secondary" href="/teacher/manage/speaking">口语题库</a>
+    <a class="button secondary" href="/teacher/manage/trash">🗑 垃圾箱</a>
+  </div>
+</section>
+
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>排序方式</h2>
+  </div>
+  <div class="actions">
+    <a class="button {% if sort_by == 'created' and order == 'desc' %}primary{% else %}secondary{% endif %}" href="/teacher/manage/{{ section }}?sort=created&order=desc">创建时间 ↓</a>
+    <a class="button {% if sort_by == 'created' and order == 'asc' %}primary{% else %}secondary{% endif %}" href="/teacher/manage/{{ section }}?sort=created&order=asc">创建时间 ↑</a>
+    <a class="button {% if sort_by == 'title' and order == 'asc' %}primary{% else %}secondary{% endif %}" href="/teacher/manage/{{ section }}?sort=title&order=asc">字母 A→Z</a>
+    <a class="button {% if sort_by == 'title' and order == 'desc' %}primary{% else %}secondary{% endif %}" href="/teacher/manage/{{ section }}?sort=title&order=desc">字母 Z→A</a>
+    <a class="button {% if sort_by == 'task_type' %}primary{% else %}secondary{% endif %}" href="/teacher/manage/{{ section }}?sort=task_type&order=asc">按题型</a>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>题目列表</h2>
+  </div>
+  {% if questions %}
+  <div class="table">
+    {% for question in questions %}
+    <article class="table-row" id="row-{{ loop.index }}" data-path="{{ question._path }}" data-title="{{ question.title }}">
+      <div>
+        <strong class="q-title" id="title-{{ loop.index }}">{{ question.title }}</strong>
+        <small>{{ question.topic }} · {{ question.task_type }} · {{ question.id[:16] }}</small>
+        <small>{{ question.created_at }}</small>
+      </div>
+      <div class="table-actions">
+        <a class="button small" href="/teacher/manage/download/docx?path={{ question._path }}">📄 Word</a>
+        <a class="button small" href="/teacher/manage/download/pdf?path={{ question._path }}">📑 PDF</a>
+        <button class="button small" onclick="openRename(this)">✏ 改名</button>
+        <form method="post" action="/teacher/manage/delete" style="display:inline" onsubmit="return confirm('确定删除此题目吗？可在垃圾箱中保留7天。')">
+          <input type="hidden" name="path" value="{{ question._path }}">
+          <input type="hidden" name="section" value="{{ section }}">
+          <input type="hidden" name="sort_by" value="{{ sort_by }}">
+          <input type="hidden" name="order" value="{{ order }}">
+          <button class="button small danger" type="submit">🗑 删除</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">该模块暂无题目。</p>
+  {% endif %}
+</section>
+
+<div id="rename-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:100;justify-content:center;align-items:center">
+  <div style="background:#fff;border-radius:18px;padding:32px;max-width:480px;width:90%">
+    <h3 style="margin-top:0">修改题目名称</h3>
+    <form method="post" action="/teacher/manage/rename">
+      <input type="hidden" name="path" id="rename-path">
+      <input type="hidden" name="section" value="{{ section }}">
+      <input type="hidden" name="sort_by" value="{{ sort_by }}">
+      <input type="hidden" name="order" value="{{ order }}">
+      <label>新名称<input name="new_title" id="rename-input" required style="width:100%"></label>
+      <div class="actions" style="margin-top:16px">
+        <button class="button primary" type="submit">保存</button>
+        <button class="button secondary" type="button" onclick="closeRename()">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openRename(btn) {
+  var row = btn.closest('.table-row');
+  var path = row.getAttribute('data-path');
+  var title = row.getAttribute('data-title');
+  document.getElementById('rename-path').value = path;
+  document.getElementById('rename-input').value = title;
+  document.getElementById('rename-overlay').style.display = 'flex';
+  setTimeout(function() {
+    document.getElementById('rename-input').focus();
+    document.getElementById('rename-input').select();
+  }, 100);
+}
+
+function closeRename() {
+  document.getElementById('rename-overlay').style.display = 'none';
+}
+
+document.getElementById('rename-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeRename();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeRename();
+});
+</script>
+{% endblock %}

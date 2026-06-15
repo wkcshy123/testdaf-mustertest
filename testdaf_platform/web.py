@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 import markdown
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -50,6 +50,7 @@ from testdaf_platform.services.writing import (
     WritingAufgabe1Generator,
     WritingAufgabe1Input,
 )
+from testdaf_platform.services.export_service import ExportService, DOWNLOADS_DIR
 from testdaf_platform.storage.question_bank import QuestionBank
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -62,6 +63,7 @@ app.mount("/question-bank", StaticFiles(directory=QUESTION_BANK_DIR), name="ques
 
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 question_bank = QuestionBank()
+export_service = ExportService(question_bank)
 config_store = ConfigStore()
 aufgabe_1_generator = ListeningAufgabe1Generator()
 aufgabe_2_generator = ListeningAufgabe2Generator()
@@ -130,6 +132,123 @@ def teacher_dashboard(request: Request) -> HTMLResponse:
             "speaking_profiles": TASK_PROFILES,
         },
     )
+
+
+@app.get("/teacher/manage/trash", response_class=HTMLResponse)
+def teacher_trash(request: Request) -> HTMLResponse:
+    trash_items = question_bank.list_trash()
+    return templates.TemplateResponse(
+        request=request,
+        name="teacher_trash.html",
+        context={
+            "request": request,
+            "trash_items": trash_items,
+            "message": request.query_params.get("message"),
+        },
+    )
+
+
+@app.get("/teacher/manage/{section}", response_class=HTMLResponse)
+def teacher_manage_section(request: Request, section: str) -> HTMLResponse:
+    if section not in ("listening", "reading", "writing", "speaking"):
+        return RedirectResponse(url="/teacher", status_code=303)
+    all_items = question_bank.list_questions(section=section)
+    sort_by = request.query_params.get("sort", "created")
+    order = request.query_params.get("order", "desc")
+    if sort_by == "title":
+        all_items.sort(key=lambda item: str(item.get("title", "")).lower(), reverse=(order == "desc"))
+    elif sort_by == "task_type":
+        all_items.sort(key=lambda item: str(item.get("task_type", "")), reverse=(order == "desc"))
+    else:
+        all_items.sort(key=lambda item: str(item.get("created_at", "")), reverse=(order != "asc"))
+    section_labels = {
+        "listening": "听力 Hörverstehen",
+        "reading": "阅读 Leseverstehen",
+        "writing": "写作 Schriftlicher Ausdruck",
+        "speaking": "口语 Mündlicher Ausdruck",
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="teacher_manage.html",
+        context={
+            "request": request,
+            "section": section,
+            "section_label": section_labels.get(section, section),
+            "questions": all_items,
+            "sort_by": sort_by,
+            "order": order,
+            "message": request.query_params.get("message"),
+        },
+    )
+
+
+@app.post("/teacher/manage/delete")
+async def delete_question(request: Request) -> RedirectResponse:
+    form = await request.form()
+    path = str(form.get("path", ""))
+    section = str(form.get("section", "listening"))
+    try:
+        question_bank.move_to_trash(path)
+        return RedirectResponse(url=f"/teacher/manage/{section}?message=已移至垃圾箱", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(url=f"/teacher/manage/{section}?message=删除失败: {exc}", status_code=303)
+
+
+@app.post("/teacher/manage/restore")
+async def restore_question(request: Request) -> RedirectResponse:
+    form = await request.form()
+    trash_path = str(form.get("trash_path", ""))
+    try:
+        question_bank.restore_from_trash(trash_path)
+        return RedirectResponse(url="/teacher/manage/trash?message=已恢复", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(url=f"/teacher/manage/trash?message=恢复失败: {exc}", status_code=303)
+
+
+@app.get("/teacher/manage/download/{fmt}")
+def download_question(request: Request, fmt: str) -> FileResponse:
+    path = request.query_params.get("path", "")
+    if not path:
+        return RedirectResponse(url="/teacher", status_code=303)
+    if fmt not in ("docx", "pdf"):
+        return RedirectResponse(url="/teacher", status_code=303)
+    try:
+        file_path = export_service.export(path, fmt=fmt)
+        return FileResponse(
+            path=str(file_path),
+            filename=file_path.name,
+            media_type="application/octet-stream",
+        )
+    except Exception as exc:
+        query = urlencode({"error": f"导出失败: {exc}"})
+        return RedirectResponse(url=f"/teacher?{query}", status_code=303)
+
+
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=DOWNLOADS_DIR), name="downloads")
+
+
+@app.post("/teacher/manage/rename")
+async def rename_question(request: Request) -> RedirectResponse:
+    form = await request.form()
+    path = str(form.get("path", ""))
+    new_title = str(form.get("new_title", "")).strip()
+    section = str(form.get("section", "listening"))
+    sort_by = str(form.get("sort_by", "created"))
+    order = str(form.get("order", "desc"))
+    if not new_title:
+        return RedirectResponse(
+            url=f"/teacher/manage/{section}?sort={sort_by}&order={order}&message=标题不能为空", status_code=303
+        )
+    try:
+        question_bank.rename_question(path, new_title)
+        return RedirectResponse(
+            url=f"/teacher/manage/{section}?sort={sort_by}&order={order}&message=已改名", status_code=303
+        )
+    except Exception as exc:
+        return RedirectResponse(
+            url=f"/teacher/manage/{section}?sort={sort_by}&order={order}&message=改名失败: {exc}", status_code=303
+        )
 
 
 @app.get("/teacher/listening/aufgabe-1", response_class=HTMLResponse)

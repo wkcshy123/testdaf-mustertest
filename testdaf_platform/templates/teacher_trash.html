@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}垃圾箱 · 题库管理{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">题库管理</p>
+  <h1>🗑 垃圾箱</h1>
+  <p class="lead">共 {{ trash_items|length }} 条被删除的题目。7 天后自动清理。</p>
+  <div class="actions">
+    <a class="button secondary" href="/teacher">返回老师出题索引</a>
+    <a class="button secondary" href="/teacher/manage/listening">听力题库</a>
+    <a class="button secondary" href="/teacher/manage/reading">阅读题库</a>
+    <a class="button secondary" href="/teacher/manage/writing">写作题库</a>
+    <a class="button secondary" href="/teacher/manage/speaking">口语题库</a>
+  </div>
+</section>
+
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-title">
+    <h2>已删除题目</h2>
+    <span>保留 {{ 7 }} 天后自动清除</span>
+  </div>
+  {% if trash_items %}
+  <div class="table">
+    {% for item in trash_items %}
+    <article class="table-row">
+      <div>
+        <strong>{{ item.title }}</strong>
+        <small>{{ item.task_type }} · {{ item.section }}</small>
+        <small>删除时间：{{ item.deleted_at[:19] }}</small>
+        <small>原始路径：{{ item.original_path }}</small>
+      </div>
+      <div class="table-actions">
+        <form method="post" action="/teacher/manage/restore" style="display:inline">
+          <input type="hidden" name="trash_path" value="{{ item._trash_path }}">
+          <button class="button small" type="submit">↩ 恢复</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">垃圾箱为空。</p>
+  {% endif %}
+</section>
+{% endblock %}
