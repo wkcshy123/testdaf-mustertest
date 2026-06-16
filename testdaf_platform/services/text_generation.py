@@ -1,6 +1,9 @@
 """Unified Qwen text generation client."""
 
+import time
+
 import dashscope
+import requests
 from dashscope import Generation, MultiModalConversation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
@@ -9,14 +12,24 @@ dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
 
 MULTIMODAL_TEXT_MODEL_PREFIXES = ("qwen3.7", "qwen3.6", "qwen3.5")
+TEXT_GENERATION_REQUEST_RETRIES = 3
+TEXT_GENERATION_FALLBACK_MODEL = "qwen3.6-flash"
 
 
 class TextGenerationClient:
     """Route text generation requests to the correct DashScope API."""
 
-    def __init__(self, model: str = QWEN_TEXT_MODEL, base_url: str = DASHSCOPE_BASE_URL):
+    def __init__(
+        self,
+        model: str = QWEN_TEXT_MODEL,
+        base_url: str = DASHSCOPE_BASE_URL,
+        fallback_models: tuple[str, ...] | None = None,
+    ):
         self.model = model
         self.base_url = base_url
+        if fallback_models is None:
+            fallback_models = (TEXT_GENERATION_FALLBACK_MODEL,) if self.uses_multimodal_api(model) else ()
+        self.fallback_models = tuple(fallback_models)
 
     def generate_text(
         self,
@@ -25,29 +38,84 @@ class TextGenerationClient:
         messages: list[dict],
         max_tokens: int | None = None,
     ) -> str:
-        dashscope.base_http_api_url = self.base_url
-        if self.uses_multimodal_api(self.model):
-            response = MultiModalConversation.call(
-                model=self.model,
-                api_key=api_key,
-                messages=self._to_multimodal_messages(messages),
-                max_tokens=max_tokens,
-            )
-            text = self._extract_multimodal_text(response)
+        model_errors: list[str] = []
+        response: object | None = None
+        text = ""
+        for model in (self.model, *self.fallback_models):
+            try:
+                response, text = self._generate_with_retries(
+                    model=model,
+                    api_key=api_key,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                )
+                break
+            except RuntimeError as exc:
+                model_errors.append(f"{model}: {exc}")
+                if model == self.model and not self.fallback_models:
+                    raise
         else:
-            response = Generation.call(
-                model=self.model,
-                api_key=api_key,
-                messages=messages,
-                max_tokens=max_tokens,
-            )
-            text = getattr(getattr(response, "output", None), "text", "") or ""
+            raise RuntimeError("文本模型请求失败：" + "；".join(model_errors))
 
+        if response is None:
+            raise RuntimeError("文本模型请求失败：未获得响应")
         if response.status_code != 200:
             raise RuntimeError(f"API 错误 {response.status_code}: {response.message or response.code}")
         if not text:
             raise RuntimeError("API 未返回文本")
         return text.strip()
+
+    def _generate_with_retries(
+        self,
+        *,
+        model: str,
+        api_key: str,
+        messages: list[dict],
+        max_tokens: int | None,
+    ) -> tuple[object, str]:
+        last_error: requests.RequestException | None = None
+        for attempt in range(1, TEXT_GENERATION_REQUEST_RETRIES + 1):
+            try:
+                return self._call_generation_once(
+                    model=model,
+                    api_key=api_key,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt == TEXT_GENERATION_REQUEST_RETRIES:
+                    raise RuntimeError(
+                        f"已重试 {TEXT_GENERATION_REQUEST_RETRIES} 次：{exc}"
+                    ) from exc
+                time.sleep(min(attempt * 2, 5))
+        raise RuntimeError(f"文本模型请求失败：{last_error}")
+
+    def _call_generation_once(
+        self,
+        *,
+        model: str,
+        api_key: str,
+        messages: list[dict],
+        max_tokens: int | None,
+    ) -> tuple[object, str]:
+        dashscope.base_http_api_url = self.base_url
+        if self.uses_multimodal_api(model):
+            response = MultiModalConversation.call(
+                model=model,
+                api_key=api_key,
+                messages=self._to_multimodal_messages(messages),
+                max_tokens=max_tokens,
+            )
+            return response, self._extract_multimodal_text(response)
+
+        response = Generation.call(
+            model=model,
+            api_key=api_key,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+        return response, getattr(getattr(response, "output", None), "text", "") or ""
 
     @staticmethod
     def uses_multimodal_api(model: str) -> bool:

@@ -8,7 +8,11 @@ CONFIG_FILE = Path.home() / ".german_tts_config.json"
 QUESTION_BANK_DIR = PROJECT_ROOT / "question_bank"
 
 QWEN_TTS_MODEL = "qwen3-tts-flash"
-QWEN_TEXT_MODEL = "qwen3.7-plus"
+QWEN_TEXT_MODEL = "qwen3.6-flash"
+
+# 复杂结构题（多人访谈、匹配题、精确长度长文本）flash 偶发无法遵循
+# JSON schema 或长度约束，改用更强模型保证稳定。
+COMPLEX_STRUCTURE_MODEL = "qwen3.7-plus"
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1"
 
 VOICES = [

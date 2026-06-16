@@ -15,6 +15,16 @@
 {% if created %}<div class="notice">写作题目包已生成：{{ created }}</div>{% endif %}
 {% if error %}<div class="notice error">生成失败：{{ error }}</div>{% endif %}
 
+{% if job_id %}
+<section class="panel job-panel" data-job-id="{{ job_id }}">
+  <div class="panel-title">
+    <h2>生成任务进行中</h2>
+    <span id="job-status">queued</span>
+  </div>
+  <p id="job-step" class="lead">等待开始</p>
+</section>
+{% endif %}
+
 <section class="panel">
   <div class="panel-title">
     <h2>生成 Schriftlicher Ausdruck</h2>

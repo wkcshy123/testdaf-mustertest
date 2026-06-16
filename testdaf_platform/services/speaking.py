@@ -5,11 +5,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import dashscope
-
-from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
-
-dashscope.base_http_api_url = DASHSCOPE_BASE_URL
+from testdaf_platform.config import QWEN_TEXT_MODEL
+from testdaf_platform.services.text_generation import TextGenerationClient
 
 
 TASK_PROFILES = {
@@ -91,18 +88,17 @@ class SpeakingTaskGenerator:
 
     def __init__(self, model: str = QWEN_TEXT_MODEL):
         self.model = model
+        self.client = TextGenerationClient(model=model)
 
     def generate(self, api_key: str, data: SpeakingTaskInput) -> dict:
         profile = TASK_PROFILES[data.number]
         expected_chart_count = max(1, min(data.chart_count, 2)) if profile["needs_chart"] else 0
-        resp = dashscope.MultiModalConversation.call(
-            model=self.model,
+        content = self._build_content(data, profile)
+        raw_text = self.client.generate_text(
             api_key=api_key,
-            messages=[{"role": "user", "content": self._build_content(data, profile)}],
+            messages=[{"role": "user", "content": content}],
         )
-        if resp.status_code != 200:
-            raise RuntimeError(f"API 错误 {resp.status_code}: {resp.message or resp.code}")
-        payload = self._parse_json(self._extract_text(resp))
+        payload = self._parse_json(raw_text)
         self._validate(payload, data.number, profile, expected_chart_count)
         payload["number"] = data.number
         payload["task_type"] = profile["name"]
@@ -190,15 +186,6 @@ class SpeakingTaskGenerator:
             '  "source_note": "素材使用说明，内部字段"\n'
             "}\n"
         )
-
-    def _extract_text(self, response: object) -> str:
-        message = response.output.choices[0].message
-        content = message.content
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            return "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
-        return str(content).strip()
 
     def _parse_json(self, content: str) -> dict:
         cleaned = content.strip()

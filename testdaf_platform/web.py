@@ -5,32 +5,22 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlencode
 
-import markdown
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from testdaf_platform.config import PROJECT_ROOT, QUESTION_BANK_DIR, VOICES
+from testdaf_platform.config import COMPLEX_STRUCTURE_MODEL, PROJECT_ROOT, QUESTION_BANK_DIR, VOICES
 from testdaf_platform.services.config_store import ConfigStore
 from testdaf_platform.services.jobs import JobManager
 from testdaf_platform.services.listening_aufgabe_1 import ListeningAufgabe1Generator
-from testdaf_platform.services.listening_aufgabe_2 import (
-    ListeningAufgabe2Generator,
-    ListeningAufgabe2Input,
-)
-from testdaf_platform.services.listening_aufgabe_3 import (
-    ListeningAufgabe3Generator,
-    ListeningAufgabe3Input,
-)
+from testdaf_platform.services.listening_aufgabe_2 import ListeningAufgabe2Generator
+from testdaf_platform.services.listening_aufgabe_3 import ListeningAufgabe3Generator
 from testdaf_platform.services.multi_speaker_tts import MultiSpeakerTTSService
 from testdaf_platform.services.reading import (
     ReadingAufgabe1Generator,
-    ReadingAufgabe1Input,
     ReadingAufgabe2Generator,
-    ReadingAufgabe2Input,
     ReadingAufgabe3Generator,
-    ReadingAufgabe3Input,
 )
 from testdaf_platform.services.reference_materials import (
     ReferenceMaterialBundle,
@@ -45,14 +35,38 @@ from testdaf_platform.services.tts import TTSService
 from testdaf_platform.services.writing import (
     ChartRenderer,
     WritingAufgabe1Generator,
-    WritingAufgabe1Input,
 )
 from testdaf_platform.routers.teacher_manage import create_router as create_teacher_manage_router
+from testdaf_platform.routers.teacher_pages import create_router as create_teacher_pages_router
 from testdaf_platform.services.export_service import ExportService
 from testdaf_platform.storage.question_bank import QuestionBank
 from testdaf_platform.usecases.create_listening_aufgabe_1 import (
     CreateListeningAufgabe1Request,
     CreateListeningAufgabe1UseCase,
+)
+from testdaf_platform.usecases.create_listening_aufgabe_2 import (
+    CreateListeningAufgabe2Request,
+    CreateListeningAufgabe2UseCase,
+)
+from testdaf_platform.usecases.create_listening_aufgabe_3 import (
+    CreateListeningAufgabe3Request,
+    CreateListeningAufgabe3UseCase,
+)
+from testdaf_platform.usecases.create_reading_aufgabe_1 import (
+    CreateReadingAufgabe1Request,
+    CreateReadingAufgabe1UseCase,
+)
+from testdaf_platform.usecases.create_reading_aufgabe_2 import (
+    CreateReadingAufgabe2Request,
+    CreateReadingAufgabe2UseCase,
+)
+from testdaf_platform.usecases.create_reading_aufgabe_3 import (
+    CreateReadingAufgabe3Request,
+    CreateReadingAufgabe3UseCase,
+)
+from testdaf_platform.usecases.create_writing_aufgabe_1 import (
+    CreateWritingAufgabe1Request,
+    CreateWritingAufgabe1UseCase,
 )
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -68,10 +82,10 @@ question_bank = QuestionBank()
 export_service = ExportService(question_bank)
 config_store = ConfigStore()
 aufgabe_1_generator = ListeningAufgabe1Generator()
-aufgabe_2_generator = ListeningAufgabe2Generator()
+aufgabe_2_generator = ListeningAufgabe2Generator(model=COMPLEX_STRUCTURE_MODEL)
 aufgabe_3_generator = ListeningAufgabe3Generator()
-reading_aufgabe_1_generator = ReadingAufgabe1Generator()
-reading_aufgabe_2_generator = ReadingAufgabe2Generator()
+reading_aufgabe_1_generator = ReadingAufgabe1Generator(model=COMPLEX_STRUCTURE_MODEL)
+reading_aufgabe_2_generator = ReadingAufgabe2Generator(model=COMPLEX_STRUCTURE_MODEL)
 reading_aufgabe_3_generator = ReadingAufgabe3Generator()
 writing_aufgabe_1_generator = WritingAufgabe1Generator()
 speaking_task_generator = SpeakingTaskGenerator()
@@ -86,12 +100,53 @@ create_listening_aufgabe_1_usecase = CreateListeningAufgabe1UseCase(
     multi_speaker_tts_service=multi_speaker_tts_service,
     question_bank=question_bank,
 )
+create_listening_aufgabe_2_usecase = CreateListeningAufgabe2UseCase(
+    reference_material_service=reference_material_service,
+    generator=aufgabe_2_generator,
+    multi_speaker_tts_service=multi_speaker_tts_service,
+    question_bank=question_bank,
+)
+create_listening_aufgabe_3_usecase = CreateListeningAufgabe3UseCase(
+    reference_material_service=reference_material_service,
+    generator=aufgabe_3_generator,
+    multi_speaker_tts_service=multi_speaker_tts_service,
+    question_bank=question_bank,
+)
+create_reading_aufgabe_1_usecase = CreateReadingAufgabe1UseCase(
+    reference_material_service=reference_material_service,
+    generator=reading_aufgabe_1_generator,
+    question_bank=question_bank,
+)
+create_reading_aufgabe_2_usecase = CreateReadingAufgabe2UseCase(
+    reference_material_service=reference_material_service,
+    generator=reading_aufgabe_2_generator,
+    question_bank=question_bank,
+)
+create_reading_aufgabe_3_usecase = CreateReadingAufgabe3UseCase(
+    reference_material_service=reference_material_service,
+    generator=reading_aufgabe_3_generator,
+    question_bank=question_bank,
+)
+create_writing_aufgabe_1_usecase = CreateWritingAufgabe1UseCase(
+    reference_material_service=reference_material_service,
+    generator=writing_aufgabe_1_generator,
+    chart_renderer=chart_renderer,
+    question_bank=question_bank,
+)
 
 app.include_router(
     create_teacher_manage_router(
         templates=templates,
         question_bank=question_bank,
         export_service=export_service,
+    )
+)
+app.include_router(
+    create_teacher_pages_router(
+        templates=templates,
+        question_bank=question_bank,
+        voices=VOICES,
+        task_profiles=TASK_PROFILES,
     )
 )
 
@@ -128,220 +183,6 @@ def index(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/teacher", response_class=HTMLResponse)
-def teacher_dashboard(request: Request) -> HTMLResponse:
-    questions = question_bank.list_questions()
-    listening_questions = [item for item in questions if item.get("section") == "listening"]
-    reading_questions = [item for item in questions if item.get("section") == "reading"]
-    writing_questions = [item for item in questions if item.get("section") == "writing"]
-    speaking_questions = [item for item in questions if item.get("section") == "speaking"]
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "listening_count": len(listening_questions),
-            "reading_count": len(reading_questions),
-            "writing_count": len(writing_questions),
-            "speaking_count": len(speaking_questions),
-            "speaking_profiles": TASK_PROFILES,
-            "error": request.query_params.get("error"),
-        },
-    )
-
-
-@app.get("/teacher/listening/aufgabe-1", response_class=HTMLResponse)
-def teacher_listening_aufgabe_1(request: Request) -> HTMLResponse:
-    questions = _list_listening_questions("aufgabe_1")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_listening_aufgabe_1.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "voices": VOICES,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-        },
-    )
-
-
-@app.get("/teacher/listening/aufgabe-2", response_class=HTMLResponse)
-def teacher_listening_aufgabe_2(request: Request) -> HTMLResponse:
-    questions = _list_listening_questions("aufgabe_2")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_listening_aufgabe_2.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "voices": VOICES,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-        },
-    )
-
-
-@app.get("/teacher/listening/aufgabe-3", response_class=HTMLResponse)
-def teacher_listening_aufgabe_3(request: Request) -> HTMLResponse:
-    questions = _list_listening_questions("aufgabe_3")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_listening_aufgabe_3.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "voices": VOICES,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-        },
-    )
-
-
-@app.get("/teacher/reading/aufgabe-1", response_class=HTMLResponse)
-def teacher_reading_aufgabe_1(request: Request) -> HTMLResponse:
-    questions = _list_questions("reading", "aufgabe_1")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_reading_aufgabe_1.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": "阅读 Aufgabe 1",
-            "task_url": "/teacher/reading/aufgabe-1",
-        },
-    )
-
-
-@app.get("/teacher/reading/aufgabe-2", response_class=HTMLResponse)
-def teacher_reading_aufgabe_2(request: Request) -> HTMLResponse:
-    questions = _list_questions("reading", "aufgabe_2")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_reading_aufgabe_2.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": "阅读 Aufgabe 2",
-            "task_url": "/teacher/reading/aufgabe-2",
-        },
-    )
-
-
-@app.get("/teacher/reading/aufgabe-3", response_class=HTMLResponse)
-def teacher_reading_aufgabe_3(request: Request) -> HTMLResponse:
-    questions = _list_questions("reading", "aufgabe_3")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_reading_aufgabe_3.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": "阅读 Aufgabe 3",
-            "task_url": "/teacher/reading/aufgabe-3",
-        },
-    )
-
-
-@app.get("/teacher/writing/aufgabe-1", response_class=HTMLResponse)
-def teacher_writing_aufgabe_1(request: Request) -> HTMLResponse:
-    questions = _list_questions("writing", "aufgabe_1")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_writing_aufgabe_1.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": "写作 Aufgabe 1",
-            "task_url": "/teacher/writing/aufgabe-1",
-        },
-    )
-
-
-@app.get("/teacher/speaking/test-set", response_class=HTMLResponse)
-def teacher_speaking_test_set(request: Request) -> HTMLResponse:
-    questions = _list_questions("speaking", "test_set")
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_speaking_test_set.html",
-        context={
-            "request": request,
-            "questions": questions,
-            "voices": VOICES,
-            "task_profiles": TASK_PROFILES,
-            "created": created,
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": "口语 7 题套卷",
-            "task_url": "/teacher/speaking/test-set",
-        },
-    )
-
-
-@app.get("/teacher/speaking/aufgabe-{number}", response_class=HTMLResponse)
-def teacher_speaking_aufgabe(request: Request, number: int) -> HTMLResponse:
-    if number not in TASK_PROFILES:
-        return templates.TemplateResponse(
-            request=request,
-            name="teacher_speaking_task.html",
-            context={"request": request, "error": "口语题号必须在 1-7 之间。"},
-            status_code=404,
-        )
-    task_type = f"aufgabe_{number}"
-    questions = _list_questions("speaking", task_type)
-    created = request.query_params.get("created")
-    preview = _load_preview(questions, created)
-    return templates.TemplateResponse(
-        request=request,
-        name="teacher_speaking_task.html",
-        context={
-            "request": request,
-            "number": number,
-            "profile": TASK_PROFILES[number],
-            "questions": questions,
-            "voices": VOICES,
-            "created": created,
-            "job_id": request.query_params.get("job"),
-            "error": request.query_params.get("error"),
-            "preview": preview,
-            "task_label": f"口语 Aufgabe {number}",
-            "task_url": f"/teacher/speaking/aufgabe-{number}",
-        },
-    )
-
-
 @app.post("/teacher/listening/create")
 def create_listening_question(
     scenario: str = Form(...),
@@ -355,21 +196,27 @@ def create_listening_question(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        manifest = create_listening_aufgabe_1_usecase.execute(
-            api_key=key,
-            request=CreateListeningAufgabe1Request(
+        _resolve_api_key(api_key)
+        req = CreateListeningAufgabe1Request(
             scenario=scenario.strip(),
-                reference_material=reference_material,
-                reference_urls=reference_urls,
-                difficulty=difficulty,
-                information_flow=information_flow,
-                speech_speed=speed,
-                speaker_a_voice=speaker_a_voice,
-                speaker_b_voice=speaker_b_voice,
-            ),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
+            difficulty=difficulty,
+            information_flow=information_flow,
+            speech_speed=speed,
+            speaker_a_voice=speaker_a_voice,
+            speaker_b_voice=speaker_b_voice,
         )
-        return RedirectResponse(url=f"/teacher/listening/aufgabe-1?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("听力 Aufgabe 1")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成对话并合成音频")
+            manifest = create_listening_aufgabe_1_usecase.execute(api_key=key, request=req)
+            return f"/teacher/listening/aufgabe-1?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/listening/aufgabe-1?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/listening/aufgabe-1?{query}", status_code=303)
@@ -390,46 +237,29 @@ def create_listening_aufgabe_2(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-
-        generation = aufgabe_2_generator.generate(
-            key,
-            ListeningAufgabe2Input(
-                topic=topic.strip(),
-                reference_material=reference_bundle.combined_text,
-                difficulty=difficulty,
-                information_flow=information_flow,
-                statement_balance=statement_balance,
-            ),
-        )
-
-        question_id = question_bank.new_question_id()
-        question_dir = question_bank.get_question_dir("listening", "aufgabe_2", question_id)
-        speaker_voice_map = _build_three_voice_map(host_voice, guest_b_voice, guest_c_voice)
-        audio_result = multi_speaker_tts_service.synthesize_dialogue(
-            api_key=key,
-            segments=generation["segments"],
-            speaker_voice_map=speaker_voice_map,
-            output_dir=question_dir,
-        )
-
-        manifest = question_bank.save_listening_aufgabe_2(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            reference_material=reference_bundle.combined_text,
+        _resolve_api_key(api_key)
+        req = CreateListeningAufgabe2Request(
+            topic=topic.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
             difficulty=difficulty,
             information_flow=information_flow,
             statement_balance=statement_balance,
             speech_speed=speed,
-            speaker_voice_map=speaker_voice_map,
-            generation=generation,
-            audio_filename=audio_result.path.name,
-            audio_size_kb=audio_result.size_kb,
-            segment_files=audio_result.segment_files,
-            reference_sources=reference_bundle.sources,
+            host_voice=host_voice,
+            guest_b_voice=guest_b_voice,
+            guest_c_voice=guest_c_voice,
         )
-        return RedirectResponse(url=f"/teacher/listening/aufgabe-2?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("听力 Aufgabe 2")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成访谈并合成音频")
+            manifest = create_listening_aufgabe_2_usecase.execute(api_key=key, request=req)
+            return f"/teacher/listening/aufgabe-2?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/listening/aufgabe-2?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/listening/aufgabe-2?{query}", status_code=303)
@@ -450,49 +280,29 @@ def create_listening_aufgabe_3(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-
-        normalized_multi_point = max(0, min(int(multi_point_questions), 3))
-        generation = aufgabe_3_generator.generate(
-            key,
-            ListeningAufgabe3Input(
-                topic=topic.strip(),
-                expert_domain=expert_domain.strip(),
-                reference_material=reference_bundle.combined_text,
-                difficulty=difficulty,
-                question_focus_mix=question_focus_mix,
-                multi_point_questions=normalized_multi_point,
-            ),
-        )
-
-        question_id = question_bank.new_question_id()
-        question_dir = question_bank.get_question_dir("listening", "aufgabe_3", question_id)
-        speaker_voice_map = _build_voice_map(host_voice, expert_voice)
-        audio_result = multi_speaker_tts_service.synthesize_dialogue(
-            api_key=key,
-            segments=generation["segments"],
-            speaker_voice_map=speaker_voice_map,
-            output_dir=question_dir,
-        )
-
-        manifest = question_bank.save_listening_aufgabe_3(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            expert_domain_input=expert_domain.strip(),
-            reference_material=reference_bundle.combined_text,
+        _resolve_api_key(api_key)
+        req = CreateListeningAufgabe3Request(
+            topic=topic.strip(),
+            expert_domain=expert_domain.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
             difficulty=difficulty,
             question_focus_mix=question_focus_mix,
-            multi_point_questions=normalized_multi_point,
+            multi_point_questions=multi_point_questions,
             speech_speed=speed,
-            speaker_voice_map=speaker_voice_map,
-            generation=generation,
-            audio_filename=audio_result.path.name,
-            audio_size_kb=audio_result.size_kb,
-            segment_files=audio_result.segment_files,
-            reference_sources=reference_bundle.sources,
+            host_voice=host_voice,
+            expert_voice=expert_voice,
         )
-        return RedirectResponse(url=f"/teacher/listening/aufgabe-3?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("听力 Aufgabe 3")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成访谈并合成音频")
+            manifest = create_listening_aufgabe_3_usecase.execute(api_key=key, request=req)
+            return f"/teacher/listening/aufgabe-3?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/listening/aufgabe-3?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/listening/aufgabe-3?{query}", status_code=303)
@@ -509,30 +319,25 @@ def create_reading_aufgabe_1(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-        generation = reading_aufgabe_1_generator.generate(
-            key,
-            ReadingAufgabe1Input(
-                topic=topic.strip(),
-                reference_material=reference_bundle.combined_text,
-                difficulty=difficulty,
-                offer_count=int(offer_count),
-                no_match_count=int(no_match_count),
-            ),
-        )
-        question_id = question_bank.new_question_id()
-        manifest = question_bank.save_reading_aufgabe_1(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            reference_material=reference_bundle.combined_text,
+        _resolve_api_key(api_key)
+        req = CreateReadingAufgabe1Request(
+            topic=topic.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
             difficulty=difficulty,
             offer_count=int(offer_count),
             no_match_count=int(no_match_count),
-            generation=generation,
-            reference_sources=reference_bundle.sources,
         )
-        return RedirectResponse(url=f"/teacher/reading/aufgabe-1?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("阅读 Aufgabe 1")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成匹配题")
+            manifest = create_reading_aufgabe_1_usecase.execute(api_key=key, request=req)
+            return f"/teacher/reading/aufgabe-1?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/reading/aufgabe-1?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/reading/aufgabe-1?{query}", status_code=303)
@@ -549,30 +354,25 @@ def create_reading_aufgabe_2(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-        generation = reading_aufgabe_2_generator.generate(
-            key,
-            ReadingAufgabe2Input(
-                topic=topic.strip(),
-                reference_material=reference_bundle.combined_text,
-                difficulty=difficulty,
-                text_length=text_length,
-                skill_focus=skill_focus,
-            ),
-        )
-        question_id = question_bank.new_question_id()
-        manifest = question_bank.save_reading_aufgabe_2(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            reference_material=reference_bundle.combined_text,
+        _resolve_api_key(api_key)
+        req = CreateReadingAufgabe2Request(
+            topic=topic.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
             difficulty=difficulty,
             text_length=text_length,
             skill_focus=skill_focus,
-            generation=generation,
-            reference_sources=reference_bundle.sources,
         )
-        return RedirectResponse(url=f"/teacher/reading/aufgabe-2?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("阅读 Aufgabe 2")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成阅读理解题")
+            manifest = create_reading_aufgabe_2_usecase.execute(api_key=key, request=req)
+            return f"/teacher/reading/aufgabe-2?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/reading/aufgabe-2?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/reading/aufgabe-2?{query}", status_code=303)
@@ -589,30 +389,25 @@ def create_reading_aufgabe_3(
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-        generation = reading_aufgabe_3_generator.generate(
-            key,
-            ReadingAufgabe3Input(
-                topic=topic.strip(),
-                reference_material=reference_bundle.combined_text,
-                difficulty=difficulty,
-                judgement_balance=judgement_balance,
-                unsupported_items=unsupported_items,
-            ),
-        )
-        question_id = question_bank.new_question_id()
-        manifest = question_bank.save_reading_aufgabe_3(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            reference_material=reference_bundle.combined_text,
+        _resolve_api_key(api_key)
+        req = CreateReadingAufgabe3Request(
+            topic=topic.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
             difficulty=difficulty,
             judgement_balance=judgement_balance,
             unsupported_items=unsupported_items,
-            generation=generation,
-            reference_sources=reference_bundle.sources,
         )
-        return RedirectResponse(url=f"/teacher/reading/aufgabe-3?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("阅读 Aufgabe 3")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成判断题")
+            manifest = create_reading_aufgabe_3_usecase.execute(api_key=key, request=req)
+            return f"/teacher/reading/aufgabe-3?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/reading/aufgabe-3?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/reading/aufgabe-3?{query}", status_code=303)
@@ -635,43 +430,35 @@ def create_writing_aufgabe_1(
     question_id = question_bank.new_question_id()
     question_dir = question_bank.get_question_dir("writing", "aufgabe_1", question_id)
     try:
-        key = _resolve_api_key(api_key)
-        reference_bundle = _build_reference_material(reference_material, reference_urls)
-        normalized_chart_count = max(1, min(int(chart_count), 2))
+        _resolve_api_key(api_key)
         reference_image_files, reference_image_paths = _save_reference_images(
             question_dir,
             reference_images,
         )
-        generation = writing_aufgabe_1_generator.generate(
-            key,
-            WritingAufgabe1Input(
-                topic=topic.strip(),
-                reference_material=reference_bundle.combined_text,
-                image_notes=image_notes.strip(),
-                difficulty=difficulty,
-                chart_count=normalized_chart_count,
-                chart_type_preference=chart_type_preference,
-                argument_focus=argument_focus,
-                country_comparison=country_comparison,
-                reference_image_paths=reference_image_paths,
-            ),
-        )
-        chart_files = chart_renderer.render_charts(generation["chart_specs"], question_dir)
-        manifest = question_bank.save_writing_aufgabe_1(
-            question_id=question_id,
-            topic_input=topic.strip(),
-            reference_material=reference_bundle.combined_text,
+        req = CreateWritingAufgabe1Request(
+            topic=topic.strip(),
+            reference_material=reference_material,
+            reference_urls=reference_urls,
+            image_notes=image_notes,
             difficulty=difficulty,
-            chart_count=normalized_chart_count,
+            chart_count=chart_count,
             chart_type_preference=chart_type_preference,
             argument_focus=argument_focus,
             country_comparison=country_comparison,
-            generation=generation,
-            chart_files=chart_files,
+            question_id=question_id,
             reference_image_files=reference_image_files,
-            reference_sources=reference_bundle.sources,
+            reference_image_paths=reference_image_paths,
         )
-        return RedirectResponse(url=f"/teacher/writing/aufgabe-1?created={manifest.id}", status_code=303)
+        job_id = job_manager.create("写作 Aufgabe 1")
+
+        def run_job() -> str:
+            key = _resolve_api_key(api_key)
+            job_manager.update(job_id, step="调用文本模型生成写作题并渲染图表")
+            manifest = create_writing_aufgabe_1_usecase.execute(api_key=key, request=req)
+            return f"/teacher/writing/aufgabe-1?created={manifest.id}"
+
+        job_manager.start(job_id, run_job)
+        return RedirectResponse(url=f"/teacher/writing/aufgabe-1?job={job_id}", status_code=303)
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/writing/aufgabe-1?{query}", status_code=303)
@@ -862,28 +649,6 @@ def _build_voice_map(speaker_a_voice: str, speaker_b_voice: str) -> dict[str, st
     return {"A": speaker_a_voice, "B": fallback}
 
 
-def _build_three_voice_map(host_voice: str, guest_b_voice: str, guest_c_voice: str) -> dict[str, str]:
-    selected = [host_voice, guest_b_voice, guest_c_voice]
-    fallbacks = ["Neil", "Maia", "Ethan", "Cherry", "Kai", "Serena"]
-    resolved = []
-    for voice in selected:
-        if voice not in resolved:
-            resolved.append(voice)
-            continue
-        replacement = next(item for item in fallbacks if item not in resolved)
-        resolved.append(replacement)
-    return {"A": resolved[0], "B": resolved[1], "C": resolved[2]}
-
-
-def _list_listening_questions(task_type: str) -> list[dict]:
-    return _list_questions("listening", task_type)
-
-
-def _list_questions(section: str, task_type: str) -> list[dict]:
-    questions = question_bank.list_questions(section=section)
-    return [question for question in questions if question.get("task_type") == task_type]
-
-
 def _resolve_api_key(api_key: str) -> str:
     key = api_key.strip() or os.getenv("DASHSCOPE_API_KEY", "") or config_store.load_api_key()
     if not key:
@@ -944,24 +709,3 @@ def _default_speaking_role(number: int) -> str:
         6: "Herr Dr. Flügel, Seminarleiter",
         7: "Karla, Studienfreundin",
     }.get(number, "Gesprächspartner/in")
-
-
-def _load_preview(questions: list[dict], created: str | None) -> dict | None:
-    if not created:
-        return None
-
-    question = next((item for item in questions if item.get("id") == created), None)
-    if not question:
-        return None
-
-    bundle = question_bank.load_question_bundle(question["_path"])
-    preview_markdown = bundle.get("preview", "")
-    return {
-        "manifest": bundle["manifest"],
-        "path": bundle["path"],
-        "html": markdown.markdown(
-            preview_markdown,
-            extensions=["extra", "sane_lists"],
-            output_format="html5",
-        ),
-    }
