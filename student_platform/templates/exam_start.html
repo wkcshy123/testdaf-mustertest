@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}整卷模考 · TestDaF{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="muted">Vollständiger Modelltest</p>
+  <h1>整卷模考</h1>
+  <p>按阅读 → 听力 → 写作 → 口语顺序完成全部四个模块。每个模块有独立限时。</p>
+</section>
+
+{% if request.query_params.get("error") %}
+<div class="notice error">{{ request.query_params.get("error") }}</div>
+{% endif %}
+
+{% if gaps %}
+<section class="panel">
+  <h2>题库不足，无法组卷</h2>
+  <p>以下题型在题库中没有任何题目，请先在出题系统中生成：</p>
+  <div class="table">
+    {% for gap in gaps %}
+    <div class="table-row">
+      <strong class="warn">{{ gap }}</strong>
+      <span class="muted">缺少题目</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted">补齐以上题型后即可开始整卷模考。</p>
+</section>
+{% else %}
+<section class="panel">
+  <h2>试卷预览</h2>
+  <p>系统已从题库随机抽取以下题目组成试卷：</p>
+
+  {% for section in module_order %}
+  <div class="exam-section-preview">
+    <h3>{{ module_labels[section] }}
+      {% if module_time_limits[section] > 0 %}
+      <span class="muted">（{{ module_time_limits[section] // 60 }} 分钟）</span>
+      {% else %}
+      <span class="muted">（不限时）</span>
+      {% endif %}
+    </h3>
+    <div class="table">
+      {% for question in questions[section] %}
+      <div class="table-row">
+        <div>
+          <strong>{{ question.title }}</strong><br>
+          <span class="muted">{{ question.task_type }} · {{ question.topic }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <form method="post" action="/exam/start" style="margin-top:20px;">
+    <button type="submit" class="button primary" style="font-size:17px;padding:12px 28px;">开始考试</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

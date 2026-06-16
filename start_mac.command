@@ -22,11 +22,23 @@ uv sync
 
 echo
 echo "正在启动服务..."
-echo "访问地址: http://127.0.0.1:8000/"
+echo "出题系统（老师）: http://127.0.0.1:8000/"
+echo "答题系统（学生）: http://127.0.0.1:8001/"
+echo "账号系统（注册/登录）: http://127.0.0.1:8002/"
 echo "如需停止服务，请在此窗口按 Control+C。"
 echo
 
+# 学生答题系统（后台）
+uv run python student_main.py >/tmp/testdaf_student.log 2>&1 &
+# 学生账号系统（后台）
+uv run python student_account_platform/account_main.py >/tmp/testdaf_account.log 2>&1 &
+
+# 出题系统（前台）
 uv run python main.py
+
+# 前台退出后，回收后台进程
+kill %+ 2>/dev/null || true
+kill %- 2>/dev/null || true
 
 echo
 read -n 1 -s -r -p "服务已停止，按任意键关闭窗口..."

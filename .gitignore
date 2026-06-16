@@ -21,5 +21,8 @@ question_bank/
 # Local student attempt data
 student_attempts/
 
+# Local student account data (credentials, sessions)
+students/
+
 # Local reference PDFs
 Modelltest_01_*.pdf

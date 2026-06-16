@@ -8,6 +8,8 @@ CONFIG_FILE = Path.home() / ".german_tts_config.json"
 QUESTION_BANK_DIR = PROJECT_ROOT / "question_bank"
 
 QWEN_TTS_MODEL = "qwen3-tts-flash"
+# 支持 instructions 表现力控制的模型；仅在提供 instructions 时切换使用。
+QWEN_TTS_INSTRUCT_MODEL = "qwen3-tts-instruct-flash"
 QWEN_TEXT_MODEL = "qwen3.6-flash"
 
 # 复杂结构题（多人访谈、匹配题、精确长度长文本）flash 偶发无法遵循

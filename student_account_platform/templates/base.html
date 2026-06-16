@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TestDaF 学生账号系统{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <nav class="nav">
+      <a href="/">账号首页</a>
+      <a href="/students">学生名单</a>
+      {% if student %}
+        <span class="whoami">你好，{{ student.name }}</span>
+        <a href="/profile">个人中心</a>
+        <form method="post" action="/logout" style="margin:0">
+          <button class="button" type="submit">退出登录</button>
+        </form>
+      {% else %}
+        <span class="spacer"></span>
+        <a href="/login">登录</a>
+        <a class="button primary" href="/register">注册</a>
+      {% endif %}
+    </nav>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

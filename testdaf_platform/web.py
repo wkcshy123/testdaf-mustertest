@@ -211,7 +211,7 @@ def create_listening_question(
 
         def run_job() -> str:
             key = _resolve_api_key(api_key)
-            job_manager.update(job_id, step="调用文本模型生成对话并合成音频")
+            job_manager.update(job_id, step="生成对话文案 → 生成语音表现力指令 → 合成音频")
             manifest = create_listening_aufgabe_1_usecase.execute(api_key=key, request=req)
             return f"/teacher/listening/aufgabe-1?created={manifest.id}"
 
@@ -254,7 +254,7 @@ def create_listening_aufgabe_2(
 
         def run_job() -> str:
             key = _resolve_api_key(api_key)
-            job_manager.update(job_id, step="调用文本模型生成访谈并合成音频")
+            job_manager.update(job_id, step="生成访谈文案 → 生成语音表现力指令 → 合成音频")
             manifest = create_listening_aufgabe_2_usecase.execute(api_key=key, request=req)
             return f"/teacher/listening/aufgabe-2?created={manifest.id}"
 
@@ -297,7 +297,7 @@ def create_listening_aufgabe_3(
 
         def run_job() -> str:
             key = _resolve_api_key(api_key)
-            job_manager.update(job_id, step="调用文本模型生成访谈并合成音频")
+            job_manager.update(job_id, step="生成访谈文案 → 生成语音表现力指令 → 合成音频")
             manifest = create_listening_aufgabe_3_usecase.execute(api_key=key, request=req)
             return f"/teacher/listening/aufgabe-3?created={manifest.id}"
 
@@ -546,87 +546,6 @@ async def create_speaking_aufgabe(request: Request, number: int) -> RedirectResp
     except Exception as exc:
         query = urlencode({"error": str(exc)})
         return RedirectResponse(url=f"/teacher/speaking/aufgabe-{number}?{query}", status_code=303)
-
-
-@app.post("/teacher/speaking/test-set/create")
-async def create_speaking_test_set(request: Request) -> RedirectResponse:
-    question_id = question_bank.new_question_id()
-    question_dir = question_bank.get_question_dir("speaking", "test_set", question_id)
-    try:
-        form = await request.form()
-        key = _resolve_api_key(str(form.get("api_key", "")))
-        difficulty = str(form.get("difficulty", "standard"))
-        tasks = []
-        reference_texts = []
-
-        for number in range(1, 8):
-            task_dir = question_dir / f"task_{number}"
-            topic = str(form.get(f"task_{number}_topic", "")).strip()
-            reference_material = str(form.get(f"task_{number}_reference_material", "")).strip()
-            reference_urls = str(form.get(f"task_{number}_reference_urls", "")).strip()
-            image_notes = str(form.get(f"task_{number}_image_notes", "")).strip()
-            examiner_role = str(form.get(f"task_{number}_examiner_role", "")).strip()
-            voice = str(form.get(f"task_{number}_voice", "Cherry"))
-            chart_count = int(form.get(f"task_{number}_chart_count", "1"))
-            chart_types = _parse_chart_types(form, chart_count, prefix=f"task_{number}_")
-            if not topic:
-                raise RuntimeError(f"请填写 Aufgabe {number} 的主题。")
-            if not examiner_role:
-                examiner_role = _default_speaking_role(number)
-
-            reference_bundle = _build_reference_material(reference_material, reference_urls)
-            reference_texts.append(reference_bundle.combined_text)
-            uploads = _form_uploads(form, f"task_{number}_reference_images")
-            _, reference_image_paths = _save_reference_images(task_dir, uploads)
-            generated = speaking_task_generator.generate(
-                key,
-                SpeakingTaskInput(
-                    number=number,
-                    topic=topic,
-                    reference_material=reference_bundle.combined_text,
-                    image_notes=image_notes,
-                    difficulty=difficulty,
-                    examiner_role=examiner_role,
-                    voice=voice,
-                    chart_count=chart_count,
-                    chart_types=chart_types,
-                    reference_image_paths=reference_image_paths,
-                ),
-            )
-
-            chart_files = []
-            if generated.get("chart_specs"):
-                chart_files = [
-                    f"task_{number}/{filename}"
-                    for filename in chart_renderer.render_charts(generated["chart_specs"], task_dir)
-                ]
-
-            audio_path = task_dir / "intro.wav"
-            tts_service.synthesize_german(
-                api_key=key,
-                text=generated["examiner_intro"],
-                voice=voice,
-                save_path=audio_path,
-            )
-            generated["audio"] = f"task_{number}/intro.wav"
-            generated["chart_files"] = chart_files
-            generated["reference_image_count"] = len(reference_image_paths)
-            tasks.append(generated)
-
-        title = "Mündlicher Ausdruck Test-Set"
-        topic_summary = " / ".join(task["title"] for task in tasks[:3])
-        manifest = question_bank.save_speaking_test_set(
-            question_id=question_id,
-            title=title,
-            topic_summary=topic_summary,
-            tasks=tasks,
-            reference_material="\n\n".join(reference_texts),
-            reference_sources={"note": "Referenzquellen werden pro Aufgabe im kombinierten Material berücksichtigt."},
-        )
-        return RedirectResponse(url=f"/teacher/speaking/test-set?created={manifest.id}", status_code=303)
-    except Exception as exc:
-        query = urlencode({"error": str(exc)})
-        return RedirectResponse(url=f"/teacher/speaking/test-set?{query}", status_code=303)
 
 
 @app.get("/student", response_class=HTMLResponse)

@@ -56,6 +56,11 @@ class FakeListeningGenerator:
         }
 
 
+class FakeInstructionGenerator:
+    def generate(self, *, api_key, title, scenario, speaker_roles, relationship, segments, speech_speed="normal"):
+        return [f"指令 {s.get('speaker_id')}" for s in segments]
+
+
 class FakeMultiSpeakerTTSService:
     def synthesize_dialogue(
         self,
@@ -64,6 +69,7 @@ class FakeMultiSpeakerTTSService:
         segments: list[dict],
         speaker_voice_map: dict[str, str],
         output_dir: Path,
+        instructions: list[str] | None = None,
     ) -> DialogueAudioResult:
         output_dir.mkdir(parents=True, exist_ok=True)
         audio_path = output_dir / "audio.wav"
@@ -73,6 +79,8 @@ class FakeMultiSpeakerTTSService:
             size_kb=audio_path.stat().st_size / 1024,
             segment_files=["audio_segments/segment_001_A.wav"],
             speaker_voice_map=speaker_voice_map,
+            instructions=instructions or [],
+            used_instruct_model=bool(instructions),
         )
 
 
@@ -84,6 +92,7 @@ class CreateListeningAufgabe1UseCaseTest(unittest.TestCase):
                 reference_material_service=FakeReferenceMaterialService(),
                 generator=FakeListeningGenerator(),
                 multi_speaker_tts_service=FakeMultiSpeakerTTSService(),
+                instruction_generator=FakeInstructionGenerator(),
                 question_bank=bank,
             )
 
@@ -109,6 +118,10 @@ class CreateListeningAufgabe1UseCaseTest(unittest.TestCase):
             self.assertTrue((question_dir / "audio.wav").exists())
             self.assertTrue((question_dir / "segments.json").exists())
             self.assertTrue((question_dir / "questions.json").exists())
+
+            # Instructions are persisted onto each segment.
+            saved_segments = json.loads((question_dir / "segments.json").read_text(encoding="utf-8"))
+            self.assertTrue(all("tts_instruction" in s for s in saved_segments))
 
 
 if __name__ == "__main__":

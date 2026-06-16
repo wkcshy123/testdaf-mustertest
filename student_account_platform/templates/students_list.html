@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}学生名单 · TestDaF 学生账号{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="muted">Students</p>
+  <h1>学生名单</h1>
+  <p class="muted">共 {{ account_count }} 位已注册学生。</p>
+</section>
+
+<section class="panel">
+  {% if accounts %}
+  <div class="table">
+    {% for account in accounts %}
+    <div class="table-row">
+      <div>
+        <strong>{{ account.name }}</strong><br>
+        <span>{{ account.username }}</span>
+      </div>
+      <span>{{ account.created_at }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">还没有学生注册。</p>
+  {% endif %}
+</section>
+{% endblock %}

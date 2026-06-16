@@ -71,13 +71,16 @@ class QuestionPresenter:
         }
 
         # ------------------------------------------------------------------
-        # Listening: audio + play count + question/statement forms
+        # Listening: audio playback control (play count + answer-anytime)
+        # Only set for listening questions — speaking has its own intro
+        # audio handled by the multi-stage state machine.
         # ------------------------------------------------------------------
-        assets = question_meta.get("assets", {})
-        if assets.get("audio"):
-            view["audio_file"] = assets["audio"]
-            params = question_meta.get("parameters", {})
-            view["play_count"] = params.get("play_count", 1)
+        if section == "listening":
+            assets = question_meta.get("assets", {})
+            if assets.get("audio"):
+                view["audio_file"] = assets["audio"]
+                params = question_meta.get("parameters", {})
+                view["play_count"] = params.get("play_count", 1)
 
         if answer_mode == "short_text":
             view["items"] = self._present_short_text(bundle)
@@ -93,8 +96,10 @@ class QuestionPresenter:
             view["items"] = self._present_ja_nein(bundle)
         elif answer_mode == "essay":
             view.update(self._present_essay(bundle, question_meta))
+        elif answer_mode == "spoken_response":
+            view.update(self._present_speaking(bundle, question_meta))
         else:
-            # speaking or unknown — not yet supported
+            # unknown answer_mode — not supported
             return None
 
         return view
@@ -194,4 +199,51 @@ class QuestionPresenter:
             "essay_task_prompt": prompt.get("task_prompt", ""),
             "essay_instructions": prompt.get("writing_instructions", []),
             "chart_images": chart_images,
+        }
+
+    @staticmethod
+    def _parse_german_duration(text: str) -> int:
+        """Parse German time strings into seconds.
+
+        Handles: "30 Sekunden", "1 Minute", "1 Minute 30 Sekunden",
+        "3 Minuten", "1 Minute 30 Sekunden".
+        """
+        import re
+
+        total = 0
+        min_match = re.search(r"(\d+)\s*Minute[n]?", text)
+        sec_match = re.search(r"(\d+)\s*Sekunde[n]?", text)
+        if min_match:
+            total += int(min_match.group(1)) * 60
+        if sec_match:
+            total += int(sec_match.group(1))
+        return total if total > 0 else 60
+
+    @staticmethod
+    def _present_speaking(bundle: dict, question_meta: dict) -> dict:
+        """Extract speaking prompt data for the multi-stage answer page.
+
+        Returns scenario, prompt_points, examiner intro text, parsed
+        prep/speaking durations, chart images, and intro audio path.
+        """
+        prompt = bundle.get("prompt", {})
+        assets = question_meta.get("assets", {})
+        params = question_meta.get("parameters", {})
+
+        prep_raw = prompt.get("prep_time") or params.get("prep_time", "1 Minute")
+        speak_raw = prompt.get("speaking_time") or params.get("speaking_time", "1 Minute")
+
+        return {
+            "speaking_scenario": prompt.get("scenario", ""),
+            "speaking_prompt_points": prompt.get("prompt_points", []),
+            "speaking_examiner_intro": prompt.get("examiner_intro", ""),
+            "speaking_task_type": prompt.get("task_type", ""),
+            "speaking_number": prompt.get("number", 0),
+            "prep_time_text": prep_raw,
+            "prep_time_seconds": QuestionPresenter._parse_german_duration(prep_raw),
+            "speaking_time_text": speak_raw,
+            "speaking_time_seconds": QuestionPresenter._parse_german_duration(speak_raw),
+            "needs_chart": prompt.get("needs_chart", False),
+            "chart_images": assets.get("chart_images", []),
+            "intro_audio": assets.get("audio", ""),
         }

@@ -220,29 +220,8 @@ def create_router(
         )
 
     # ------------------------------------------------------------------
-    # 口语出题页面（test-set 必须在 aufgabe-{number} 之前注册）
+    # 口语出题页面（单题模式）
     # ------------------------------------------------------------------
-
-    @router.get("/teacher/speaking/test-set", response_class=HTMLResponse)
-    def teacher_speaking_test_set(request: Request) -> HTMLResponse:
-        questions = _list_questions("speaking", "test_set")
-        created = request.query_params.get("created")
-        preview = _load_preview(questions, created)
-        return templates.TemplateResponse(
-            request=request,
-            name="teacher_speaking_test_set.html",
-            context={
-                "request": request,
-                "questions": questions,
-                "voices": voices,
-                "task_profiles": task_profiles,
-                "created": created,
-                "error": request.query_params.get("error"),
-                "preview": preview,
-                "task_label": "口语 7 题套卷",
-                "task_url": "/teacher/speaking/test-set",
-            },
-        )
 
     @router.get("/teacher/speaking/aufgabe-{number}", response_class=HTMLResponse)
     def teacher_speaking_aufgabe(request: Request, number: int) -> HTMLResponse:

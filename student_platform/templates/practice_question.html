@@ -9,6 +9,7 @@
   <p>{{ view.topic }}</p>
 </section>
 
+{% if view.answer_mode != "spoken_response" %}
 <section class="panel timer-bar" id="timer-bar">
   <div class="timer-info">
     <span class="timer-label">剩余时间</span>
@@ -27,6 +28,7 @@
   </div>
   {% endif %}
 </section>
+{% endif %}
 
 <form id="answer-form" method="post"
       action="/practice/{{ view.section }}/{{ view.task_type }}/{{ view.question_id }}/submit">
@@ -100,6 +102,9 @@
   <section class="panel reading-text-area">
     <h2>阅读文本（Lesetext）</h2>
     <article class="reading-text">
+      {% if view.title %}
+      <h3 class="reading-title">{{ view.title }}</h3>
+      {% endif %}
       {% for para in view["reading_paragraphs"] %}
       <p>{{ para }}</p>
       {% endfor %}
@@ -126,6 +131,9 @@
   <section class="panel reading-text-area">
     <h2>阅读文本（Lesetext）</h2>
     <article class="reading-text">
+      {% if view.title %}
+      <h3 class="reading-title">{{ view.title }}</h3>
+      {% endif %}
       {% for para in view["reading_paragraphs"] %}
       <p>{{ para }}</p>
       {% endfor %}
@@ -190,12 +198,92 @@
               rows="20"></textarea>
   </section>
 
+  {% elif view.answer_mode == "spoken_response" %}
+  <input type="hidden" name="speaking_audio" id="speaking-audio-flag" value="">
+
+  <section class="panel speaking-stage" id="speaking-stage">
+    <div class="stage-indicator">
+      <span class="stage-dot active" id="dot-prompt">题目</span>
+      <span class="stage-dot" id="dot-prep">准备</span>
+      <span class="stage-dot" id="dot-intro">引导语</span>
+      <span class="stage-dot" id="dot-record">录音</span>
+      <span class="stage-dot" id="dot-done">完成</span>
+    </div>
+
+    <div class="speaking-content-blur" id="speaking-content">
+      <h2>{{ view.speaking_task_type }}（Aufgabe {{ view.speaking_number }}）</h2>
+      {% if view["speaking_scenario"] %}
+      <div class="speaking-scenario"><h3>Situation</h3><p>{{ view["speaking_scenario"] }}</p></div>
+      {% endif %}
+      {% if view["chart_images"] %}
+      <div class="essay-charts">
+        {% for chart in view["chart_images"] %}
+        <figure><img src="/question-bank/{{ view.path }}/{{ chart }}" alt="Grafik {{ loop.index }}" class="essay-chart-img"><figcaption>Grafik {{ loop.index }}</figcaption></figure>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if view["speaking_prompt_points"] %}
+      <div class="speaking-points"><h3>Ihre Aufgabe</h3><ul>{% for point in view["speaking_prompt_points"] %}<li>{{ point }}</li>{% endfor %}</ul></div>
+      {% endif %}
+    </div>
+    <div class="speaking-blur-overlay" id="blur-overlay">
+      <p>点击下方按钮后开始计时并查看题目</p>
+    </div>
+    <p class="muted">准备 {{ view.prep_time_text }} · 回答 {{ view.speaking_time_text }}</p>
+
+    <div id="stage-prompt" class="stage-content active">
+      <button type="button" class="button primary speaking-start-btn" id="speaking-start-btn">开始本题</button>
+    </div>
+
+    <div id="stage-prep" class="stage-content">
+      <h2>准备时间（Vorbereitung）</h2>
+      <p class="speaking-timer" id="prep-timer">--:--</p>
+      <p class="muted">倒计时结束后将自动播放考官引导语。</p>
+    </div>
+
+    <div id="stage-intro" class="stage-content">
+      <h2>考官引导语</h2>
+      <p class="muted">请仔细听考官的开场白。</p>
+      <audio id="examiner-intro-audio" preload="auto"
+             src="/question-bank/{{ view.path }}/{{ view.intro_audio }}"></audio>
+      <button type="button" class="button primary" id="intro-play-btn">▶ 播放引导语</button>
+      <p class="muted" id="intro-hint">音频播放后将自动进入录音阶段。</p>
+    </div>
+
+    <div id="stage-record" class="stage-content">
+      <h2>回答录音（Antwort）</h2>
+      <p class="speaking-timer recording" id="record-timer">--:--</p>
+      <div class="recording-indicator">
+        <span class="rec-dot" id="rec-dot"></span>
+        <span id="rec-status">录音中…</span>
+      </div>
+      <button type="button" class="button" id="stop-record-btn">提前停止录音</button>
+    </div>
+
+    <div id="stage-done" class="stage-content">
+      <h2>录音完成</h2>
+      <audio id="playback-audio" controls></audio>
+      <p class="muted">试听确认后提交本题。</p>
+      <div class="speaking-submit-area">
+        <button type="button" class="button primary" id="speaking-submit-btn">提交本题</button>
+      </div>
+    </div>
+
+    <div id="speaking-error" class="speaking-error" style="display:none;">
+      <p class="error"></p>
+    </div>
+  </section>
+
   {% endif %}
+  {% if view.answer_mode != "spoken_response" %}
+  <section class="panel submit-area">
     <button type="submit" class="button primary" id="submit-btn">提交作答</button>
     <span class="muted" id="submit-hint"></span>
   </section>
+  {% endif %}
 </form>
 
+{% if view.answer_mode != "spoken_response" %}
 <script>
 (function () {
   var PLAYS_KEY = "practice_plays_{{ view.question_id }}";
@@ -313,4 +401,225 @@
   });
 })();
 </script>
+{% endif %}
+
+{% if view.answer_mode == "spoken_response" %}
+<script>
+(function () {
+  var PREP_TIME = {{ view.prep_time_seconds }};
+  var SPEAK_TIME = {{ view.speaking_time_seconds }};
+  var SUBMIT_URL = "/practice/{{ view.section }}/{{ view.task_type }}/{{ view.question_id }}/submit";
+  var REFRESH_SUBMIT_URL = "/practice/{{ view.section }}/{{ view.task_type }}/{{ view.question_id }}/refresh-submit";
+  var QUESTION_ID = "{{ view.question_id }}";
+  var STAGE_KEY = "practice_sp_stage_" + QUESTION_ID;
+
+  var mediaRecorder = null;
+  var chunks = [];
+  var audioBlob = null;
+  var timer = null;
+  var recordedMimeType = "";
+  var recordedExtension = "webm";
+
+  var stages = ["prompt", "prep", "intro", "record", "done"];
+
+  function showStage(name) {
+    try { sessionStorage.setItem(STAGE_KEY, name); } catch (e) {}
+    stages.forEach(function (s) {
+      var el = document.getElementById("stage-" + s);
+      if (el) el.classList.toggle("active", s === name);
+      var dot = document.getElementById("dot-" + s);
+      if (dot) dot.classList.toggle("active", s === name);
+    });
+  }
+
+  function clearStartedState() {
+    try { sessionStorage.removeItem(STAGE_KEY); } catch (e) {}
+  }
+
+  function fmt(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  function countdown(displayId, seconds, onDone) {
+    var remaining = seconds;
+    var el = document.getElementById(displayId);
+    if (el) el.textContent = fmt(remaining);
+    timer = setInterval(function () {
+      remaining--;
+      if (el) el.textContent = fmt(Math.max(0, remaining));
+      if (remaining <= 0) {
+        clearInterval(timer);
+        onDone();
+      }
+    }, 1000);
+  }
+
+  function showError(msg) {
+    var box = document.getElementById("speaking-error");
+    if (box) {
+      box.querySelector("p").textContent = msg;
+      box.style.display = "block";
+    }
+  }
+
+  function showRefreshSubmitting() {
+    document.getElementById("speaking-stage").innerHTML =
+      '<div class="panel"><h2>本题已因刷新提交</h2>' +
+      '<p class="muted">系统正在保存空答案，并进入作答结果页。</p>' +
+      '<p class="muted">答案为空将视为未作答。</p></div>';
+  }
+
+  function submitBlankDueToRefresh(savedStage) {
+    showRefreshSubmitting();
+    var fd = new FormData();
+    fd.append("stage", savedStage || "");
+    fetch(REFRESH_SUBMIT_URL, { method: "POST", body: fd }).then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    }).then(function (data) {
+      if (!data.ok) throw new Error(data.error || "提交失败");
+      clearStartedState();
+      window.location.href = data.redirect_url;
+    }).catch(function (err) {
+      document.getElementById("speaking-stage").innerHTML =
+        '<div class="panel"><h2>刷新提交失败</h2>' +
+        '<p class="error">' + err.message + '</p>' +
+        '<button type="button" class="button primary" id="retry-refresh-submit">重试提交</button></div>';
+      var retry = document.getElementById("retry-refresh-submit");
+      if (retry) retry.addEventListener("click", function () { submitBlankDueToRefresh(savedStage); });
+    });
+  }
+
+  (function () {
+    var saved = "";
+    try { saved = sessionStorage.getItem(STAGE_KEY) || ""; } catch (e) {}
+    if (saved && saved !== "prompt") submitBlankDueToRefresh(saved);
+  })();
+
+  document.getElementById("speaking-start-btn").addEventListener("click", function () {
+    var content = document.getElementById("speaking-content");
+    var overlay = document.getElementById("blur-overlay");
+    if (content) content.classList.add("revealed");
+    if (overlay) overlay.classList.add("hidden");
+    showStage("prep");
+    countdown("prep-timer", PREP_TIME, startIntro);
+  });
+
+  function startIntro() {
+    showStage("intro");
+    var introAudio = document.getElementById("examiner-intro-audio");
+    var introPlayBtn = document.getElementById("intro-play-btn");
+
+    introAudio.play().catch(function () {
+      document.getElementById("intro-hint").textContent = "请点击按钮播放引导语。";
+    });
+    introAudio.addEventListener("ended", startRecording, { once: true });
+    introPlayBtn.addEventListener("click", function () {
+      introAudio.play();
+    });
+  }
+
+  function pickMimeType() {
+    var candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4",
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])) {
+        return candidates[i];
+      }
+    }
+    return "";
+  }
+
+  function mimeToExtension(mime) {
+    if (mime.indexOf("webm") !== -1) return "webm";
+    if (mime.indexOf("ogg") !== -1) return "ogg";
+    if (mime.indexOf("mp4") !== -1) return "mp4";
+    return "webm";
+  }
+
+  function startRecording() {
+    showStage("record");
+    chunks = [];
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError("此浏览器不支持录音功能。请使用 Chrome、Firefox 或 Safari 最新版本。");
+      return;
+    }
+
+    recordedMimeType = pickMimeType();
+    recordedExtension = mimeToExtension(recordedMimeType);
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var options = recordedMimeType ? { mimeType: recordedMimeType } : {};
+      mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorder.addEventListener("dataavailable", function (e) {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      });
+      mediaRecorder.addEventListener("stop", function () {
+        audioBlob = new Blob(chunks, { type: recordedMimeType || "audio/webm" });
+        document.getElementById("playback-audio").src = URL.createObjectURL(audioBlob);
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        showStage("done");
+      });
+
+      mediaRecorder.start(1000);
+      document.getElementById("rec-status").textContent = "录音中…";
+      document.getElementById("rec-dot").classList.add("active");
+
+      countdown("record-timer", SPEAK_TIME, function () {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.requestData();
+          mediaRecorder.stop();
+        }
+      });
+    }).catch(function (err) {
+      showError("无法访问麦克风：" + err.message + "。请在浏览器设置中允许麦克风访问。");
+    });
+  }
+
+  var stopBtn = document.getElementById("stop-record-btn");
+  if (!stopBtn._hasListener) {
+    stopBtn._hasListener = true;
+    stopBtn.addEventListener("click", function () {
+      if (timer) clearInterval(timer);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.requestData();
+        mediaRecorder.stop();
+      }
+    });
+  }
+
+  document.getElementById("speaking-submit-btn").addEventListener("click", function () {
+    if (!audioBlob) {
+      showError("没有录音数据，无法提交。");
+      return;
+    }
+    var formData = new FormData();
+    formData.append("elapsed_seconds", "0");
+    formData.append("timed_out", "false");
+    formData.append("answers_json", JSON.stringify({ spoken: "recorded" }));
+    formData.append("audio_file", audioBlob, "response." + recordedExtension);
+
+    fetch(SUBMIT_URL, { method: "POST", body: formData })
+      .then(function (resp) {
+        if (resp.redirected) {
+          clearStartedState();
+          window.location.href = resp.url;
+        } else {
+          showError("提交失败，请重试。");
+        }
+      })
+      .catch(function (err) {
+        showError("提交出错：" + err.message);
+      });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

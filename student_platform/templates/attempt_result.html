@@ -31,7 +31,13 @@
 
 <section class="panel">
   <h2>你的作答</h2>
-  {% if answers %}
+  {% if has_audio %}
+  <div class="attempt-audio">
+    <p class="muted">录音回放：</p>
+    <audio controls preload="auto"
+           src="/attempt/{{ attempt_id }}/audio"></audio>
+  </div>
+  {% elif answers %}
   <div class="table">
     {% for number, value in answers.items() %}
     <div class="table-row">

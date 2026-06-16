@@ -1,0 +1,750 @@
+{% extends "base.html" %}
+
+{% block title %}{{ module_label }} · 整卷模考{% endblock %}
+
+{% block content %}
+<section class="exam-bar" id="exam-bar">
+  <div class="exam-bar-left">
+    <strong>{{ module_label }}</strong>
+    <span class="muted">模块 {{ module_index + 1 }} / {{ total_modules }} · 第 {{ q_index + 1 }} / {{ q_total }} 题</span>
+  </div>
+  {% if module_time_limit > 0 %}
+  <div class="exam-timer-area">
+    <span class="timer-label">模块剩余</span>
+    <span class="timer-display" id="module-timer">--:--</span>
+  </div>
+  {% else %}
+  <div class="exam-timer-area">
+    <span class="muted">本模块不限时</span>
+  </div>
+  {% endif %}
+</section>
+
+<!-- Question navigation (hidden for speaking — forced sequential) -->
+{% if not (view and view.answer_mode == "spoken_response") %}
+<div class="exam-q-nav">
+  {% for i in range(q_total) %}
+  <a class="q-nav-dot {% if i == q_index %}active{% endif %}"
+     href="/exam/{{ exam_id }}/{{ module }}?question={{ i }}">{{ i + 1 }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Hidden fields for module submission -->
+<form id="exam-module-form" method="post"
+      action="/exam/{{ exam_id }}/{{ module }}/submit">
+  <input type="hidden" name="elapsed_seconds" id="elapsed-input" value="0">
+  <input type="hidden" name="timed_out" id="timed-out-input" value="false">
+  {% for i in range(q_total) %}
+  <input type="hidden" name="answers_{{ question_ids[i] if question_ids else '' }}" id="answers-input-{{ i }}" value="">
+  {% endfor %}
+
+  {% if view %}
+  <section class="panel">
+    <h2>{{ view.title }}</h2>
+    <p class="muted">{{ view.section }} · {{ view.task_type }} · {{ view.answer_mode }}</p>
+  </section>
+
+  {# Reuse the same answer_mode branches as practice_question.html #}
+
+  {% if view.answer_mode == "short_text" %}
+  <section class="panel answer-area">
+    {% if view.audio_file %}
+    <div class="audio-area">
+      <p class="muted">听力播放（共 {{ view.play_count }} 次）</p>
+      <audio id="practice-audio" preload="auto"
+             src="/question-bank/{{ view.path }}/{{ view.audio_file }}"></audio>
+      <div class="audio-controls">
+        <button type="button" class="button primary" id="play-btn">▶ 播放音频</button>
+        <span class="play-count">已播放 <span id="play-count">0</span> / {{ view.play_count }}</span>
+      </div>
+    </div>
+    {% endif %}
+    <h2>短答题</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.prompt }}</p>
+      <input type="text" class="text-input exam-answer" name="q_{{ item.number }}"
+             data-q-number="{{ item.number }}"
+             data-question-index="{{ q_index }}"
+             placeholder="关键词作答">
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "richtig_falsch" %}
+  <section class="panel answer-area">
+    {% if view.audio_file %}
+    <div class="audio-area">
+      <p class="muted">听力播放（共 {{ view.play_count }} 次）</p>
+      <audio id="practice-audio" preload="auto"
+             src="/question-bank/{{ view.path }}/{{ view.audio_file }}"></audio>
+      <div class="audio-controls">
+        <button type="button" class="button primary" id="play-btn">▶ 播放音频</button>
+        <span class="play-count">已播放 <span id="play-count">0</span> / {{ view.play_count }}</span>
+      </div>
+    </div>
+    {% endif %}
+    <h2>正误判断</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.statement }}</p>
+      <div class="radio-group">
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="Richtig" data-question-index="{{ q_index }}"> Richtig</label>
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="Falsch" data-question-index="{{ q_index }}"> Falsch</label>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "matching" %}
+  <section class="panel answer-area">
+    <h2>匹配题</h2>
+    <div class="offers-grid">
+      {% for offer in view["offers"] %}
+      <div class="offer-card">
+        <strong>{{ offer.label }}. {{ offer.heading }}</strong>
+        <p class="offer-text-full">{{ offer.text }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.need }}</p>
+      <select class="select-input exam-answer" name="q_{{ item.number }}" data-question-index="{{ q_index }}">
+        <option value="">— 选择 —</option>
+        {% for label in view.option_labels %}
+        <option value="{{ label }}">{{ label }}{% if label == 'I' %}（无匹配）{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "single_choice_abc" %}
+  {% if view["reading_paragraphs"] %}
+  <section class="panel reading-text-area">
+    <h2>阅读文本（Lesetext）</h2>
+    <article class="reading-text">
+      {% if view.title %}
+      <h3 class="reading-title">{{ view.title }}</h3>
+      {% endif %}
+      {% for para in view["reading_paragraphs"] %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </article>
+  </section>
+  {% endif %}
+  <section class="panel answer-area">
+    <h2>单选题</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.prompt }}</p>
+      <div class="radio-group">
+        {% for key, text in item.options.items() %}
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="{{ key }}" data-question-index="{{ q_index }}"> {{ key }}. {{ text }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "ja_nein_not_given" %}
+  {% if view["reading_paragraphs"] %}
+  <section class="panel reading-text-area">
+    <h2>阅读文本（Lesetext）</h2>
+    <article class="reading-text">
+      {% if view.title %}
+      <h3 class="reading-title">{{ view.title }}</h3>
+      {% endif %}
+      {% for para in view["reading_paragraphs"] %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </article>
+  </section>
+  {% endif %}
+  <section class="panel answer-area">
+    <h2>判断题</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.statement }}</p>
+      <div class="radio-group">
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="Ja" data-question-index="{{ q_index }}"> Ja</label>
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="Nein" data-question-index="{{ q_index }}"> Nein</label>
+        <label><input type="radio" class="exam-answer" name="q_{{ item.number }}" value="Text sagt dazu nichts" data-question-index="{{ q_index }}"> Text sagt dazu nichts</label>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "essay" %}
+  <section class="panel essay-prompt-area">
+    <h2>写作题目</h2>
+    {% if view["essay_background"] %}
+    <div class="essay-background"><h3>Hintergrund</h3><p>{{ view["essay_background"] }}</p></div>
+    {% endif %}
+    {% if view["chart_images"] %}
+    <div class="essay-charts">
+      {% for chart in view["chart_images"] %}
+      <figure>
+        <img src="/question-bank/{{ view.path }}/{{ chart }}" alt="Grafik {{ loop.index }}" class="essay-chart-img">
+        <figcaption>Grafik {{ loop.index }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="essay-task"><h3>Thema</h3><p>{{ view["essay_task_prompt"] }}</p></div>
+    {% if view["essay_instructions"] %}
+    <div class="essay-instructions"><h3>Bearbeiten Sie dabei die folgenden Punkte</h3><ul>{% for ins in view["essay_instructions"] %}<li>{{ ins }}</li>{% endfor %}</ul></div>
+    {% endif %}
+  </section>
+  <section class="panel answer-area">
+    <h2>你的作文</h2>
+    <textarea class="essay-textarea exam-answer" name="essay_text" data-q-number="essay" data-question-index="{{ q_index }}" placeholder="Hier schreiben Sie Ihren Text..." rows="20"></textarea>
+  </section>
+
+  {% elif view.answer_mode == "spoken_response" %}
+  <section class="panel speaking-stage" id="speaking-stage">
+    <div class="stage-indicator">
+      <span class="stage-dot active" id="dot-prompt">题目</span>
+      <span class="stage-dot" id="dot-prep">准备</span>
+      <span class="stage-dot" id="dot-intro">引导语</span>
+      <span class="stage-dot" id="dot-record">录音</span>
+      <span class="stage-dot" id="dot-done">完成</span>
+    </div>
+
+    <!-- Question content: blurred until "start", then always visible -->
+    <div class="speaking-content-blur" id="speaking-content">
+      <h2>{{ view.speaking_task_type }}（Aufgabe {{ view.speaking_number }}）</h2>
+      {% if view["speaking_scenario"] %}
+      <div class="speaking-scenario"><h3>Situation</h3><p>{{ view["speaking_scenario"] }}</p></div>
+      {% endif %}
+      {% if view["chart_images"] %}
+      <div class="essay-charts">
+        {% for chart in view["chart_images"] %}
+        <figure><img src="/question-bank/{{ view.path }}/{{ chart }}" alt="Grafik {{ loop.index }}" class="essay-chart-img"><figcaption>Grafik {{ loop.index }}</figcaption></figure>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if view["speaking_prompt_points"] %}
+      <div class="speaking-points"><h3>Ihre Aufgabe</h3><ul>{% for point in view["speaking_prompt_points"] %}<li>{{ point }}</li>{% endfor %}</ul></div>
+      {% endif %}
+    </div>
+    <div class="speaking-blur-overlay" id="blur-overlay">
+      <p>点击下方按钮后开始计时并查看题目</p>
+    </div>
+    <p class="muted">准备 {{ view.prep_time_text }} · 回答 {{ view.speaking_time_text }}</p>
+
+    <!-- Stage controls (each stage only shows its own controls) -->
+    <div id="stage-prompt" class="stage-content active">
+      <button type="button" class="button primary speaking-start-btn" id="exam-speaking-start">开始本题</button>
+    </div>
+
+    <div id="stage-prep" class="stage-content">
+      <h2>准备时间（Vorbereitung）</h2>
+      <p class="speaking-timer" id="exam-prep-timer">--:--</p>
+      <p class="muted">倒计时结束后将自动播放考官引导语。</p>
+    </div>
+
+    <div id="stage-intro" class="stage-content">
+      <h2>考官引导语</h2>
+      <p class="muted">请仔细听考官的开场白。</p>
+      <audio id="exam-intro-audio" preload="auto"
+             src="/question-bank/{{ view.path }}/{{ view.intro_audio }}"></audio>
+      <button type="button" class="button primary" id="exam-intro-play">▶ 播放引导语</button>
+      <p class="muted" id="exam-intro-hint">音频播放后将自动进入录音阶段。</p>
+    </div>
+
+    <div id="stage-record" class="stage-content">
+      <h2>回答录音（Antwort）</h2>
+      <p class="speaking-timer recording" id="exam-record-timer">--:--</p>
+      <div class="recording-indicator">
+        <span class="rec-dot" id="exam-rec-dot"></span>
+        <span id="exam-rec-status">录音中…</span>
+      </div>
+      <button type="button" class="button" id="exam-stop-rec">提前停止录音</button>
+    </div>
+
+    <div id="stage-done" class="stage-content">
+      <h2>录音完成</h2>
+      <audio id="exam-playback" controls></audio>
+      <p class="muted">试听确认后提交本题。</p>
+      <button type="button" class="button primary" id="exam-speaking-submit">提交本题</button>
+    </div>
+
+    <div id="exam-speaking-error" class="speaking-error" style="display:none;">
+      <p class="error"></p>
+    </div>
+  </section>
+
+  {% endif %}
+
+  {% else %}
+  <section class="panel">
+    <p class="muted">无法加载题目数据。</p>
+  </section>
+  {% endif %}
+
+  <!-- Navigation buttons (hidden for speaking — forced sequential) -->
+  {% if view and view.answer_mode != "spoken_response" %}
+  <section class="panel exam-nav-area">
+    <div class="exam-nav-buttons">
+      {% if q_index > 0 %}
+      <a class="button" href="/exam/{{ exam_id }}/{{ module }}?question={{ q_index - 1 }}">← 上一题</a>
+      {% endif %}
+
+      {% if q_index < q_total - 1 %}
+      <a class="button primary" href="/exam/{{ exam_id }}/{{ module }}?question={{ q_index + 1 }}">下一题 →</a>
+      {% endif %}
+
+      {% if q_index == q_total - 1 %}
+      <button type="submit" class="button primary" id="submit-module-btn">提交本模块</button>
+      {% else %}
+      <button type="submit" class="button" id="submit-module-btn-secondary">提交本模块</button>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+</form>
+
+<script>
+(function () {
+  var MODULE_TIME = {{ module_time_limit }};
+  var EXAM_ID = "{{ exam_id }}";
+  var MODULE = "{{ module }}";
+  var Q_INDEX = {{ q_index }};
+  var Q_TOTAL = {{ q_total }};
+  var STORE_KEY = "exam_answers_" + EXAM_ID + "_" + MODULE;
+
+  // --- Load/save answers for this question from sessionStorage ---
+  var allAnswers = {};
+  try {
+    var saved = sessionStorage.getItem(STORE_KEY);
+    if (saved) allAnswers = JSON.parse(saved);
+  } catch (e) {}
+
+  // Restore current question's answers into form fields
+  var currentKey = String(Q_INDEX);
+  if (allAnswers[currentKey]) {
+    var ans = allAnswers[currentKey];
+    Object.keys(ans).forEach(function (name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      if (!el) return;
+      if (el.type === "radio") {
+        var radio = document.querySelector('[name="' + name + '"][value="' + ans[name] + '"]');
+        if (radio) radio.checked = true;
+      } else {
+        el.value = ans[name];
+      }
+    });
+  }
+
+  // Save answers when navigating away
+  function saveCurrentAnswers() {
+    var collected = {};
+    document.querySelectorAll(".exam-answer").forEach(function (el) {
+      if (el.type === "radio") {
+        if (el.checked) collected[el.name] = el.value;
+      } else {
+        collected[el.name] = el.value;
+      }
+    });
+    allAnswers[String(Q_INDEX)] = collected;
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(allAnswers)); } catch (e) {}
+  }
+
+  // Save on link navigation (prev/next question)
+  document.querySelectorAll(".exam-nav-buttons a").forEach(function (a) {
+    a.addEventListener("click", saveCurrentAnswers);
+  });
+
+  // --- Module timer ---
+  var timer = null;
+  var elapsed = 0;
+  var elapsedKey = "exam_elapsed_" + EXAM_ID + "_" + MODULE;
+  try {
+    elapsed = parseInt(sessionStorage.getItem(elapsedKey) || "0", 10);
+  } catch (e) {}
+
+  function fmt(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  if (MODULE_TIME > 0) {
+    timer = setInterval(function () {
+      elapsed++;
+      try { sessionStorage.setItem(elapsedKey, String(elapsed)); } catch (e) {}
+      var remaining = MODULE_TIME - elapsed;
+      var el = document.getElementById("module-timer");
+      if (el) el.textContent = fmt(Math.max(0, remaining));
+      if (remaining <= 0) {
+        clearInterval(timer);
+        document.getElementById("timed-out-input").value = "true";
+        document.getElementById("elapsed-input").value = elapsed;
+        collectAllAndSubmit();
+      }
+    }, 1000);
+
+    // Initial render
+    var el = document.getElementById("module-timer");
+    if (el) el.textContent = fmt(MODULE_TIME - elapsed);
+  }
+
+  // --- Collect all questions' answers and submit module ---
+  function collectAllAndSubmit() {
+    if (timer) clearInterval(timer);
+    document.getElementById("elapsed-input").value = elapsed;
+
+    // Populate hidden inputs with all saved answers
+    allAnswers[String(Q_INDEX)] = (function () {
+      var c = {};
+      document.querySelectorAll(".exam-answer").forEach(function (el) {
+        if (el.type === "radio") { if (el.checked) c[el.name] = el.value; }
+        else { c[el.name] = el.value; }
+      });
+      return c;
+    })();
+
+    var qIds = {{ question_ids | tojson }};
+    qIds.forEach(function (qid, i) {
+      var ans = allAnswers[String(i)] || {};
+      var input = document.getElementById("answers-input-" + i);
+      if (input) input.value = JSON.stringify(ans);
+    });
+
+    try {
+      sessionStorage.removeItem(STORE_KEY);
+      sessionStorage.removeItem(elapsedKey);
+    } catch (e) {}
+
+    document.getElementById("exam-module-form").submit();
+  }
+
+  document.getElementById("submit-module-btn") &&
+    document.getElementById("submit-module-btn").addEventListener("click", function (e) {
+      e.preventDefault();
+      collectAllAndSubmit();
+    });
+  document.getElementById("submit-module-btn-secondary") &&
+    document.getElementById("submit-module-btn-secondary").addEventListener("click", function (e) {
+      e.preventDefault();
+      collectAllAndSubmit();
+    });
+
+  // --- Listening audio: auto-play play_count times on button click ---
+  {% if view and view.audio_file %}
+  var maxPlays = {{ view.play_count }};
+  var audio = document.getElementById("practice-audio");
+  var playBtn = document.getElementById("play-btn");
+  var playCountSpan = document.getElementById("play-count");
+  var PLAYS_KEY = "exam_plays_" + EXAM_ID + "_" + "{{ view.question_id }}";
+  var playCount = 0;
+  var autoPlaying = false;
+
+  // Restore play count from sessionStorage (survives refresh)
+  try {
+    playCount = parseInt(sessionStorage.getItem(PLAYS_KEY) || "0", 10);
+  } catch (e) {}
+  if (playCountSpan) playCountSpan.textContent = playCount;
+
+  function savePlays() {
+    try { sessionStorage.setItem(PLAYS_KEY, String(playCount)); } catch (e) {}
+  }
+
+  // If already exhausted plays, lock immediately
+  if (playCount >= maxPlays && playBtn) {
+    playBtn.disabled = true;
+    playBtn.textContent = "播放已结束";
+  }
+
+  function playNext() {
+    if (playCount >= maxPlays) {
+      autoPlaying = false;
+      playBtn.disabled = true;
+      playBtn.textContent = "播放已结束";
+      return;
+    }
+    autoPlaying = true;
+    audio.currentTime = 0;
+    audio.play().catch(function () {
+      autoPlaying = false;
+      playBtn.textContent = "▶ 播放音频（点击重试）";
+    });
+  }
+
+  if (playBtn) {
+    playBtn.addEventListener("click", function () {
+      if (playCount >= maxPlays || autoPlaying) return;
+      playNext();
+    });
+  }
+
+  if (audio) {
+    audio.addEventListener("play", function () {
+      playCount++;
+      savePlays();
+      if (playCountSpan) playCountSpan.textContent = playCount;
+      playBtn.disabled = true;
+      playBtn.textContent = "▶ 播放中…";
+    });
+
+    audio.addEventListener("ended", function () {
+      if (playCount >= maxPlays) {
+        playBtn.textContent = "播放已结束";
+      } else {
+        // Pause between replays so students can breathe
+        playBtn.textContent = "下一次播放即将开始…";
+        setTimeout(playNext, 3000);
+      }
+    });
+  }
+  {% endif %}
+
+  // --- Speaking multi-stage state machine (exam mode) ---
+  {% if view and view.answer_mode == "spoken_response" %}
+  var SP_PREP = {{ view.prep_time_seconds }};
+  var SP_SPEAK = {{ view.speaking_time_seconds }};
+  var SP_QID = "{{ view.question_id }}";
+  var SP_SUBMIT_URL = "/practice/{{ view.section }}/{{ view.task_type }}/{{ view.question_id }}/submit";
+  var SP_REFRESH_SUBMIT_URL = "/exam/" + EXAM_ID + "/speaking/refresh-submit";
+  var SP_DONE_KEY = "exam_spoken_done_" + EXAM_ID + "_" + MODULE;
+
+  // Track which speaking questions are completed (prevent re-answering)
+  var spDoneSet = {};
+  try {
+    var raw = sessionStorage.getItem(SP_DONE_KEY);
+    if (raw) spDoneSet = JSON.parse(raw);
+  } catch (e) {}
+
+  // If this question is already done, block access
+  if (spDoneSet[String(Q_INDEX)]) {
+    document.getElementById("speaking-stage").innerHTML =
+      '<div class="panel"><h2>本题已完成</h2>' +
+      '<p class="muted">你已经完成这道口语题的录音。</p>' +
+      (Q_INDEX < Q_TOTAL - 1
+        ? '<a class="button primary" href="/exam/' + EXAM_ID + '/' + MODULE + '?question=' + (Q_INDEX + 1) + '">下一题 →</a>'
+        : '<button class="button primary" id="sp-force-submit">提交本模块</button>') +
+      '</div>';
+    var fsBtn = document.getElementById("sp-force-submit");
+    if (fsBtn) fsBtn.addEventListener("click", function (e) { e.preventDefault(); collectAllAndSubmit(); });
+  } else {
+    // Mark nav dots as done
+    document.querySelectorAll(".q-nav-dot").forEach(function (dot, i) {
+      if (spDoneSet[String(i)]) dot.classList.add("done");
+    });
+    var spStages = ["prompt", "prep", "intro", "record", "done"];
+    var spState = "prompt";
+    var spRecorder = null;
+    var spChunks = [];
+    var spBlob = null;
+    var spTimer = null;
+    var spRemaining = 0;
+
+  // Persist speaking stage across refresh: once started, can't go back
+  var SP_STAGE_KEY = "exam_sp_stage_" + EXAM_ID + "_" + MODULE + "_" + Q_INDEX;
+  var SP_PREP_ELAPSED_KEY = "exam_sp_prep_" + EXAM_ID + "_" + MODULE + "_" + Q_INDEX;
+
+  function spSaveStage(name) {
+    try { sessionStorage.setItem(SP_STAGE_KEY, name); } catch (e) {}
+  }
+
+  function spGetSavedStage() {
+    try { return sessionStorage.getItem(SP_STAGE_KEY) || ""; } catch (e) { return ""; }
+  }
+
+  function spClearStartedState() {
+    try { sessionStorage.removeItem(SP_STAGE_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(SP_PREP_ELAPSED_KEY); } catch (e) {}
+  }
+
+  function spShowStage(name) {
+    spState = name;
+    spSaveStage(name);
+    spStages.forEach(function (s) {
+      var el = document.getElementById("stage-" + s);
+      if (el) el.classList.toggle("active", s === name);
+    });
+    var dots = ["prompt","prep","intro","record","done"];
+    dots.forEach(function (d) {
+      var dot = document.getElementById("dot-" + d);
+      if (dot) dot.classList.toggle("active", d === name);
+    });
+  }
+
+  function spShowRefreshSubmitting() {
+    document.getElementById("speaking-stage").innerHTML =
+      '<div class="panel"><h2>本题已因刷新提交</h2>' +
+      '<p class="muted">系统正在保存空答案，并进入下一题。</p>' +
+      '<p class="muted">答案为空将视为未作答。</p></div>';
+  }
+
+  function spSubmitBlankDueToRefresh(savedStage) {
+    spShowRefreshSubmitting();
+    var fd = new FormData();
+    fd.append("q_index", String(Q_INDEX));
+    fd.append("stage", savedStage || "");
+    fd.append("elapsed_seconds", String(elapsed || 0));
+    fetch(SP_REFRESH_SUBMIT_URL, { method: "POST", body: fd }).then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    }).then(function (data) {
+      if (!data.ok) throw new Error(data.error || "提交失败");
+      spDoneSet[String(Q_INDEX)] = true;
+      try { sessionStorage.setItem(SP_DONE_KEY, JSON.stringify(spDoneSet)); } catch (e) {}
+      spClearStartedState();
+      if (data.submit_module) {
+        collectAllAndSubmit();
+      } else {
+        window.location.href = data.next_url;
+      }
+    }).catch(function (err) {
+      document.getElementById("speaking-stage").innerHTML =
+        '<div class="panel"><h2>刷新提交失败</h2>' +
+        '<p class="error">' + err.message + '</p>' +
+        '<button type="button" class="button primary" id="retry-refresh-submit">重试提交</button></div>';
+      var retry = document.getElementById("retry-refresh-submit");
+      if (retry) retry.addEventListener("click", function () { spSubmitBlankDueToRefresh(savedStage); });
+    });
+  }
+
+  function spFmt(sec) {
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+  }
+
+  function spCountdown(displayId, seconds, onDone, elapsedKey) {
+    // Restore elapsed if available (refresh resilience)
+    var startElapsed = 0;
+    if (elapsedKey) {
+      try { startElapsed = parseInt(sessionStorage.getItem(elapsedKey) || "0", 10); } catch (e) {}
+    }
+    spRemaining = Math.max(0, seconds - startElapsed);
+    var el = document.getElementById(displayId);
+    if (el) el.textContent = spFmt(spRemaining);
+    if (spRemaining <= 0) { onDone(); return; }
+    spTimer = setInterval(function () {
+      spRemaining--;
+      startElapsed++;
+      if (elapsedKey) { try { sessionStorage.setItem(elapsedKey, String(startElapsed)); } catch (e) {} }
+      if (el) el.textContent = spFmt(Math.max(0, spRemaining));
+      if (spRemaining <= 0) { clearInterval(spTimer); onDone(); }
+    }, 1000);
+  }
+
+  function spPickMime() {
+    var cs = ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/mp4"];
+    for (var i=0;i<cs.length;i++) if (window.MediaRecorder && MediaRecorder.isTypeSupported(cs[i])) return cs[i];
+    return "";
+  }
+
+  document.getElementById("exam-speaking-start").addEventListener("click", function () {
+    // Reveal blurred content
+    var content = document.getElementById("speaking-content");
+    var overlay = document.getElementById("blur-overlay");
+    if (content) content.classList.add("revealed");
+    if (overlay) overlay.classList.add("hidden");
+    spShowStage("prep");
+    spCountdown("exam-prep-timer", SP_PREP, spStartIntro, SP_PREP_ELAPSED_KEY);
+  });
+
+  // --- Refresh resilience: restore speaking stage on page load ---
+  (function () {
+    var saved = spGetSavedStage();
+    if (!saved || saved === "prompt") return; // not started yet
+
+    // Once a speaking question has started, refresh means the answer is blank.
+    spSubmitBlankDueToRefresh(saved);
+  })();
+
+  function spStartIntro() {
+    spShowStage("intro");
+    var a = document.getElementById("exam-intro-audio");
+    a.play().catch(function () {
+      document.getElementById("exam-intro-hint").textContent = "请点击按钮播放。";
+    });
+    a.addEventListener("ended", spStartRec, { once: true });
+    document.getElementById("exam-intro-play").addEventListener("click", function () { a.play(); });
+  }
+
+  function spStartRec() {
+    spShowStage("record");
+    spChunks = [];
+    var mime = spPickMime();
+    var ext = mime.indexOf("mp4")!==-1?"mp4":mime.indexOf("ogg")!==-1?"ogg":"webm";
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var opts = mime ? { mimeType: mime } : {};
+      spRecorder = new MediaRecorder(stream, opts);
+      spRecorder.addEventListener("dataavailable", function (e) {
+        if (e.data && e.data.size > 0) spChunks.push(e.data);
+      });
+      spRecorder.addEventListener("stop", function () {
+        spBlob = new Blob(spChunks, { type: mime || "audio/webm" });
+        document.getElementById("exam-playback").src = URL.createObjectURL(spBlob);
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        spShowStage("done");
+      });
+      spRecorder.start(1000);
+      document.getElementById("exam-rec-dot").classList.add("active");
+      spCountdown("exam-record-timer", SP_SPEAK, function () {
+        if (spRecorder && spRecorder.state !== "inactive") { spRecorder.requestData(); spRecorder.stop(); }
+      });
+    }).catch(function (err) {
+      var box = document.getElementById("exam-speaking-error");
+      box.querySelector("p").textContent = "无法访问麦克风：" + err.message;
+      box.style.display = "block";
+    });
+
+    var stopBtn = document.getElementById("exam-stop-rec");
+    if (!stopBtn._sp) {
+      stopBtn._sp = true;
+      stopBtn.addEventListener("click", function () {
+        if (spTimer) clearInterval(spTimer);
+        if (spRecorder && spRecorder.state !== "inactive") { spRecorder.requestData(); spRecorder.stop(); }
+      });
+    }
+  }
+
+  document.getElementById("exam-speaking-submit").addEventListener("click", function () {
+    if (!spBlob) return;
+    var fd = new FormData();
+    fd.append("elapsed_seconds", "0");
+    fd.append("timed_out", "false");
+    fd.append("answers_json", JSON.stringify({ spoken: "recorded", exam_q_index: Q_INDEX }));
+    fd.append("audio_file", spBlob, "response." + (spBlob.type.indexOf("mp4")!==-1?"mp4":"webm"));
+    fd.append("exam_id", EXAM_ID);
+
+    fetch(SP_SUBMIT_URL, { method: "POST", body: fd }).then(function (resp) {
+      if (resp.redirected) {
+        // Mark this question as done
+        spDoneSet[String(Q_INDEX)] = true;
+        try { sessionStorage.setItem(SP_DONE_KEY, JSON.stringify(spDoneSet)); } catch (e) {}
+        spClearStartedState();
+        // After saving attempt, navigate to next question or module submit
+        saveCurrentAnswers();
+        if (Q_INDEX < Q_TOTAL - 1) {
+          window.location.href = "/exam/" + EXAM_ID + "/" + MODULE + "?question=" + (Q_INDEX + 1);
+        } else {
+          // Last speaking question — submit module
+          collectAllAndSubmit();
+        }
+      }
+    }).catch(function (err) {
+      var box = document.getElementById("exam-speaking-error");
+      box.querySelector("p").textContent = "提交失败：" + err.message;
+      box.style.display = "block";
+    });
+  });
+  }
+  {% endif %}
+
+})();
+</script>
+{% endblock %}

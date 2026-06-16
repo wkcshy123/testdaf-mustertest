@@ -26,6 +26,11 @@ class AttemptStore:
         time_limit_seconds: int,
         elapsed_seconds: int,
         timed_out: bool,
+        audio_bytes: bytes | None = None,
+        audio_filename: str = "response.webm",
+        exam_id: str | None = None,
+        student_id: str | None = None,
+        student_name: str | None = None,
     ) -> str:
         """Write an attempt directory and return its id."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -46,6 +51,17 @@ class AttemptStore:
             "elapsed_seconds": elapsed_seconds,
             "timed_out": timed_out,
         }
+        if exam_id:
+            meta["exam_id"] = exam_id
+        if student_id:
+            meta["student_id"] = student_id
+        if student_name:
+            meta["student_name"] = student_name
+
+        if audio_bytes:
+            (attempt_dir / audio_filename).write_bytes(audio_bytes)
+            meta["audio_file"] = audio_filename
+
         write_json_atomic(attempt_dir / "meta.json", meta)
         write_json_atomic(attempt_dir / "answers.json", answers)
         return attempt_id
@@ -74,4 +90,4 @@ class AttemptStore:
         meta = read_json(meta_path)
         answers_path = attempt_dir / "answers.json"
         answers = read_json(answers_path) if answers_path.exists() else {}
-        return {"meta": meta, "answers": answers}
+        return {"meta": meta, "answers": answers, "attempt_dir": str(attempt_dir)}

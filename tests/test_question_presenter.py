@@ -181,14 +181,79 @@ class QuestionPresenterTest(unittest.TestCase):
         self.assertEqual(view["essay_instructions"], ["Punkt 1", "Punkt 2"])
         self.assertEqual(view["chart_images"], ["chart_1.svg", "chart_2.svg"])
 
-    # ---- unsupported mode returns None ----
+    # ---- speaking returns prompt data with parsed durations ----
 
-    def test_speaking_returns_none(self) -> None:
+    def test_speaking_returns_prompt_with_parsed_durations(self) -> None:
+        bundle = {
+            "prompt": {
+                "number": 1,
+                "task_type": "电话咨询/信息询问",
+                "scenario": "Sie rufen beim Hochschulsport an.",
+                "prompt_points": ["Frage 1", "Frage 2"],
+                "examiner_intro": "Guten Tag, wie kann ich helfen?",
+                "prep_time": "1 Minute 30 Sekunden",
+                "speaking_time": "2 Minuten",
+                "needs_chart": False,
+                "chart_specs": [],
+            }
+        }
         meta = self._meta(
             section="speaking", task_type="aufgabe_1",
-            assets={"audio": "intro.wav"},
+            assets={"audio": "intro.wav", "chart_images": []},
             parameters={"answer_mode": "spoken_response"},
         )
+        view = QuestionPresenter(FakeReader(bundle)).present(meta)
+        self.assertIsNotNone(view)
+        self.assertEqual(view["speaking_scenario"], "Sie rufen beim Hochschulsport an.")
+        self.assertEqual(view["speaking_prompt_points"], ["Frage 1", "Frage 2"])
+        self.assertEqual(view["speaking_examiner_intro"], "Guten Tag, wie kann ich helfen?")
+        self.assertEqual(view["prep_time_seconds"], 90)
+        self.assertEqual(view["speaking_time_seconds"], 120)
+        self.assertEqual(view["intro_audio"], "intro.wav")
+        self.assertFalse(view["needs_chart"])
+
+    def test_speaking_with_chart_exposes_chart_images(self) -> None:
+        bundle = {
+            "prompt": {
+                "number": 3,
+                "scenario": "Beschreiben Sie die Grafik.",
+                "prompt_points": ["Punkt"],
+                "examiner_intro": "Schauen Sie sich die Grafik an.",
+                "prep_time": "1 Minute",
+                "speaking_time": "1 Minute 30 Sekunden",
+                "needs_chart": True,
+            }
+        }
+        meta = self._meta(
+            section="speaking", task_type="aufgabe_3",
+            assets={"audio": "intro.wav", "chart_images": ["chart_1.svg"]},
+            parameters={"answer_mode": "spoken_response"},
+        )
+        view = QuestionPresenter(FakeReader(bundle)).present(meta)
+        self.assertTrue(view["needs_chart"])
+        self.assertEqual(view["chart_images"], ["chart_1.svg"])
+
+    # ---- German duration parser ----
+
+    def test_parse_seconds_only(self) -> None:
+        self.assertEqual(QuestionPresenter._parse_german_duration("30 Sekunden"), 30)
+
+    def test_parse_single_minute(self) -> None:
+        self.assertEqual(QuestionPresenter._parse_german_duration("1 Minute"), 60)
+
+    def test_parse_plural_minutes(self) -> None:
+        self.assertEqual(QuestionPresenter._parse_german_duration("3 Minuten"), 180)
+
+    def test_parse_minute_and_seconds(self) -> None:
+        self.assertEqual(QuestionPresenter._parse_german_duration("1 Minute 30 Sekunden"), 90)
+
+    def test_parse_plural_minute_and_seconds(self) -> None:
+        self.assertEqual(QuestionPresenter._parse_german_duration("2 Minuten 15 Sekunden"), 135)
+
+    # ---- unknown mode returns None ----
+
+    def test_unknown_mode_returns_none(self) -> None:
+        meta = self._meta(parameters={"answer_mode": "bogus_mode"})
         self.assertIsNone(QuestionPresenter(FakeReader({})).present(meta))
 
 

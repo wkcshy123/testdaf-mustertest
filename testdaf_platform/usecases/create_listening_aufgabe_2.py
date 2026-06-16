@@ -8,7 +8,9 @@ from testdaf_platform.services.listening_aufgabe_2 import (
 )
 from testdaf_platform.services.multi_speaker_tts import MultiSpeakerTTSService
 from testdaf_platform.services.reference_materials import ReferenceMaterialService
+from testdaf_platform.services.tts_instructions import InstructionGenerator
 from testdaf_platform.storage.question_bank import QuestionBank, QuestionManifest
+from testdaf_platform.usecases._instruction_support import attach_instructions_to_segments
 
 
 @dataclass(frozen=True)
@@ -35,11 +37,13 @@ class CreateListeningAufgabe2UseCase:
         generator: ListeningAufgabe2Generator,
         multi_speaker_tts_service: MultiSpeakerTTSService,
         question_bank: QuestionBank,
+        instruction_generator: InstructionGenerator | None = None,
     ) -> None:
         self.reference_material_service = reference_material_service
         self.generator = generator
         self.multi_speaker_tts_service = multi_speaker_tts_service
         self.question_bank = question_bank
+        self.instruction_generator = instruction_generator or InstructionGenerator()
 
     def execute(self, *, api_key: str, request: CreateListeningAufgabe2Request) -> QuestionManifest:
         topic = request.topic.strip()
@@ -58,6 +62,18 @@ class CreateListeningAufgabe2UseCase:
             ),
         )
 
+        instructions = self.instruction_generator.generate(
+            api_key=api_key,
+            title=generation.get("title", topic),
+            scenario=topic,
+            speaker_roles=generation.get("speaker_roles", {}),
+            relationship=generation.get("relationship", ""),
+            segments=generation["segments"],
+            speech_speed=request.speech_speed,
+        )
+        generation["tts_instructions"] = instructions
+        attach_instructions_to_segments(generation["segments"], instructions)
+
         question_id = self.question_bank.new_question_id()
         question_dir = self.question_bank.get_question_dir("listening", "aufgabe_2", question_id)
         speaker_voice_map = _build_three_voice_map(
@@ -68,6 +84,7 @@ class CreateListeningAufgabe2UseCase:
             segments=generation["segments"],
             speaker_voice_map=speaker_voice_map,
             output_dir=question_dir,
+            instructions=instructions,
         )
 
         return self.question_bank.save_listening_aufgabe_2(

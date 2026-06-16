@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}整卷模考结果 · TestDaF{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="muted">考试已完成</p>
+  <h1>整卷模考结果</h1>
+  <p class="muted">考试 ID：{{ exam.exam_id }} · 开始时间：{{ exam.created_at }}</p>
+</section>
+
+{% for section in module_order %}
+<section class="panel">
+  <h2>{{ module_labels[section] }}</h2>
+  {% set section_attempts = attempts | selectattr("section", "equalto", section) | list %}
+  {% if section_attempts %}
+  <div class="table">
+    {% for attempt in section_attempts %}
+    <div class="table-row">
+      <div>
+        <strong>{{ attempt.title }}</strong><br>
+        <span class="muted">{{ attempt.task_type }} · {{ attempt.answer_mode }}</span>
+        {% if attempt.timed_out %}<span class="badge warn">超时</span>{% endif %}
+      </div>
+      <a class="button" href="/attempt/{{ attempt.attempt_id }}">查看详情</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">本模块无作答记录。</p>
+  {% endif %}
+</section>
+{% endfor %}
+
+<p class="muted">评分由评分系统提供，此处仅展示作答记录。</p>
+
+<div class="nav">
+  <a class="button" href="/">返回首页</a>
+  <a class="button" href="/exams">考试记录列表</a>
+</div>
+{% endblock %}

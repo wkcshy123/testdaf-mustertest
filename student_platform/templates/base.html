@@ -10,7 +10,16 @@
   <main class="shell">
     <nav class="nav">
       <a href="/">练习首页</a>
+      <a href="/exam">整卷模考</a>
+      <a href="/exams">考试记录</a>
       <a href="/attempts">作答记录</a>
+      {% if current_student %}
+        <span class="whoami">你好，{{ current_student.name }}</span>
+        <a href="{{ account_system_url | default('/') }}profile">个人中心</a>
+      {% else %}
+        <a href="{{ account_system_url | default('/') }}login">登录</a>
+        <a href="{{ account_system_url | default('/') }}register">注册</a>
+      {% endif %}
     </nav>
     {% block content %}{% endblock %}
   </main>

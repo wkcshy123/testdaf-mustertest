@@ -4,11 +4,12 @@
 
 ## 项目定位
 
-- 本项目是本地优先的 TestDaF 模拟考试系统，正在拆分为出题、学生答题、评分三个本地系统。
+- 本项目是本地优先的 TestDaF 模拟考试系统，正在拆分为出题、学生账号、学生答题、评分四个本地系统。
 - 出题系统负责生成题目包并保存到 `question_bank/`。
-- 学生系统只读 `question_bank/`，未来保存作答到 `student_attempts/`。
+- 学生账号系统负责注册/登录/会话，写 `students/`，是 `students/` 的唯一写者。
+- 学生答题系统只读 `question_bank/`，读 `students/sessions/` 识别登录身份，保存作答到 `student_attempts/`。
 - 评分系统未来读取 `student_attempts/` 和 `question_bank/`，输出到 `grading_results/`。
-- 当前不是多租户系统，也没有数据库、登录态、权限模型或服务端任务队列。
+- 当前不是多租户系统，也没有数据库；登录态基于本地文件会话（`students/sessions/`），无外部依赖。
 
 ## 快速入口
 
@@ -20,6 +21,7 @@
 - 题库管理路由：[teacher_manage.py](file:///Users/bytedance/德语转语音/testdaf_platform/routers/teacher_manage.py)
 - 第一个 usecase 样板：[create_listening_aufgabe_1.py](file:///Users/bytedance/德语转语音/testdaf_platform/usecases/create_listening_aufgabe_1.py)
 - 学生系统入口：[student_platform/web.py](file:///Users/bytedance/德语转语音/student_platform/web.py)
+- 学生账号系统入口：[student_account_platform/web.py](file:///Users/bytedance/德语转语音/student_account_platform/web.py)
 - 共享题库只读 reader：[reader.py](file:///Users/bytedance/德语转语音/shared/question_bank/reader.py)
 - 评分系统占位：[scoring_platform/README.md](file:///Users/bytedance/德语转语音/scoring_platform/README.md)
 - 架构拆路由计划：[route-splitting-plan.md](file:///Users/bytedance/德语转语音/docs/route-splitting-plan.md)
@@ -36,9 +38,10 @@ testdaf_platform/
   storage/               # 本地题库文件系统读写
   templates/             # Jinja2 页面模板
   static/                # CSS 等静态资源
-student_platform/        # 独立学生答题系统，只读 question_bank
+student_platform/        # 独立学生答题系统，只读 question_bank + students/sessions
+student_account_platform/  # 独立学生账号系统，写 students/（账号/会话）
 scoring_platform/        # 评分系统占位，等待学生作答协议稳定
-shared/                  # 三系统共享的文件工具、路径保护、题库只读 reader
+shared/                  # 多系统共享的文件工具、路径保护、题库只读 reader
 tests/                   # 回归测试和架构关键点测试
 scripts/                 # 诊断脚本，例如 DashScope 模型可用性检查
 docs/                    # 架构、路线图和业务分析文档
@@ -49,14 +52,17 @@ docs/                    # 架构、路线图和业务分析文档
 ```mermaid
 flowchart LR
     Authoring[出题系统<br/>testdaf_platform] -->|写入题目包| QB[(question_bank/)]
+    Account[学生账号系统<br/>student_account_platform] -->|写账号/会话| STU[(students/)]
     Student[学生答题系统<br/>student_platform] -->|只读题目包| QB
-    Student -->|未来写入作答包| Attempts[(student_attempts/)]
+    Student -->|读会话识别身份| STU
+    Student -->|写入作答包| Attempts[(student_attempts/)]
     Scoring[评分系统<br/>scoring_platform] -->|未来读取作答包| Attempts
     Scoring -->|未来读取题目答案| QB
     Scoring -->|未来写入评分报告| Results[(grading_results/)]
 
     Authoring --> Shared[shared/ 文件工具]
     Student --> Shared
+    Account --> Shared
     Scoring --> Shared
 ```
 
@@ -211,7 +217,8 @@ question_bank/
 
 - 新的文本生成调用必须走 `TextGenerationClient`。
 - 新增题型创建流程应优先按 `CreateListeningAufgabe1UseCase` 的模式抽 usecase。
-- 学生系统只读 `question_bank/`，不要 import 出题生成器或写题库。
+- 学生系统只读 `question_bank/` 和 `students/sessions/`，不要 import 出题生成器或写题库。
+- 学生账号系统是 `students/` 的唯一写者；答题系统只读 `students/sessions/`，不要写账号或会话。
 - 评分系统未来只读 `question_bank/` 和 `student_attempts/`，只写 `grading_results/`。
 - 新增管理类路由应放入 `routers/`，不要继续塞进 `web.py`。
 - 新增题库 JSON 写入必须复用 `QuestionBank._write_json()` 或同等原子写入策略。
@@ -221,7 +228,7 @@ question_bank/
 ## 常用验证命令
 
 ```bash
-uv run python -m compileall testdaf_platform student_platform shared tests scripts
+uv run python -m compileall testdaf_platform student_platform student_account_platform shared tests scripts
 uv run python -m unittest discover -s tests -v
 uv run python scripts/check_dashscope_model.py --model qwen3.7-plus --compare qwen-plus
 ```

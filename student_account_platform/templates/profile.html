@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}个人中心 · TestDaF 学生账号{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="muted">Profile</p>
+  <h1>个人中心</h1>
+</section>
+
+<section class="panel">
+  <div class="table">
+    <div class="table-row">
+      <span>姓名</span>
+      <strong>{{ student.name }}</strong>
+    </div>
+    <div class="table-row">
+      <span>用户名</span>
+      <strong>{{ student.username }}</strong>
+    </div>
+    <div class="table-row">
+      <span>学号</span>
+      <code>{{ student.student_id }}</code>
+    </div>
+    <div class="table-row">
+      <span>注册时间</span>
+      <strong>{{ student.created_at }}</strong>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>进入答题</h2>
+  <p class="muted">点击下方按钮进入答题系统，你的作答将自动与当前账号关联。</p>
+  <div class="form-actions">
+    <a class="button primary" href="{{ student_system_url }}">进入答题系统</a>
+    <a class="button" href="/students">查看学生名单</a>
+  </div>
+</section>
+{% endblock %}

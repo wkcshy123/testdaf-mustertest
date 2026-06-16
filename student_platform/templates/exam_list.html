@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}考试记录 · TestDaF{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <h1>考试记录</h1>
+  <p class="muted">共 {{ exam_count }} 次整卷模考。</p>
+</section>
+
+<section class="panel">
+  {% if exams %}
+  <div class="table">
+    {% for exam in exams %}
+    <div class="table-row">
+      <div>
+        <strong>整卷模考</strong><br>
+        <span class="muted">{{ exam.exam_id }} · {{ exam.created_at }}
+        {% if exam.status == "completed" %} · <span class="badge">已完成</span>{% else %} · <span class="badge warn">未完成</span>{% endif %}
+        </span>
+      </div>
+      <a class="button" href="/exam/{{ exam.exam_id }}/result">查看结果</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">暂无考试记录。</p>
+  {% endif %}
+</section>
+
+<div class="nav">
+  <a class="button" href="/">返回首页</a>
+  <a class="button primary" href="/exam">开始新考试</a>
+</div>
+{% endblock %}
