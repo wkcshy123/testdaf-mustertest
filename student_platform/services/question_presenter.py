@@ -1,0 +1,197 @@
+"""Normalize question bundles into student-facing render data, stripping answers."""
+
+from __future__ import annotations
+
+import os
+
+from shared.question_bank import QuestionBankReader
+
+
+# Default time limits (seconds) per section for single-question practice.
+DEFAULT_TIME_LIMITS = {
+    "listening": 300,   # 5 min (not used — listening has no timer)
+    "reading": 600,     # 10 min
+    "writing": 1200,    # 20 min (future)
+    "speaking": 600,    # 10 min (future)
+}
+
+# Per-task-type overrides, configurable via environment variables.
+# e.g. STUDENT_TIME_LIMIT_READING_AUFGABE_1=600
+_ENV_PREFIX = "STUDENT_TIME_LIMIT_"
+
+
+def _time_limit_for(section: str, task_type: str) -> int:
+    """Resolve time limit: env override > section default."""
+    env_key = f"{_ENV_PREFIX}{section.upper()}_{task_type.upper()}"
+    env_val = os.getenv(env_key)
+    if env_val:
+        try:
+            return max(0, int(env_val))
+        except ValueError:
+            pass
+    return DEFAULT_TIME_LIMITS.get(section, 600)
+
+
+# Backward-compatible flat dict (section -> seconds) for external callers.
+TIME_LIMITS = dict(DEFAULT_TIME_LIMITS)
+
+
+class QuestionPresenter:
+    """Extract a render-safe view from a question bundle.
+
+    The returned dict never contains answer/evidence/acceptable_variants
+    or any other grading fields — those stay in the bundle for the
+    scoring system.
+    """
+
+    def __init__(self, reader: QuestionBankReader):
+        self.reader = reader
+
+    def present(self, question_meta: dict) -> dict | None:
+        """Build the view model for the student answer page.
+
+        Returns None if the question type is not yet supported.
+        """
+        section = question_meta.get("section", "")
+        task_type = question_meta.get("task_type", "")
+        answer_mode = (
+            question_meta.get("parameters", {}).get("answer_mode", "")
+        )
+        bundle = self.reader.load_question_bundle(question_meta["_path"])
+
+        view = {
+            "question_id": question_meta["id"],
+            "title": question_meta.get("title", ""),
+            "topic": question_meta.get("topic", ""),
+            "section": section,
+            "task_type": task_type,
+            "answer_mode": answer_mode,
+            "path": question_meta["_path"],
+            "time_limit_seconds": _time_limit_for(section, task_type),
+        }
+
+        # ------------------------------------------------------------------
+        # Listening: audio + play count + question/statement forms
+        # ------------------------------------------------------------------
+        assets = question_meta.get("assets", {})
+        if assets.get("audio"):
+            view["audio_file"] = assets["audio"]
+            params = question_meta.get("parameters", {})
+            view["play_count"] = params.get("play_count", 1)
+
+        if answer_mode == "short_text":
+            view["items"] = self._present_short_text(bundle)
+        elif answer_mode == "richtig_falsch":
+            view["items"] = self._present_richtig_falsch(bundle)
+        elif answer_mode == "matching":
+            view.update(self._present_matching(bundle))
+        elif answer_mode == "single_choice_abc":
+            view["reading_paragraphs"] = self._split_paragraphs(bundle.get("reading_text", ""))
+            view["items"] = self._present_single_choice(bundle)
+        elif answer_mode == "ja_nein_not_given":
+            view["reading_paragraphs"] = self._split_paragraphs(bundle.get("reading_text", ""))
+            view["items"] = self._present_ja_nein(bundle)
+        elif answer_mode == "essay":
+            view.update(self._present_essay(bundle, question_meta))
+        else:
+            # speaking or unknown — not yet supported
+            return None
+
+        return view
+
+    # ------------------------------------------------------------------
+    # Per-mode presenters — each strips all grading fields
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _present_short_text(bundle: dict) -> list[dict]:
+        items = []
+        for q in bundle.get("questions", []):
+            items.append(
+                {
+                    "number": q["number"],
+                    "prompt": q.get("prompt", ""),
+                    "required_points": q.get("required_points", 1),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _present_richtig_falsch(bundle: dict) -> list[dict]:
+        items = []
+        for s in bundle.get("statements", []):
+            items.append(
+                {
+                    "number": s["number"],
+                    "statement": s.get("statement", ""),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _present_matching(bundle: dict) -> dict:
+        profiles = []
+        for p in bundle.get("profiles", []):
+            profiles.append({"number": p["number"], "need": p.get("need", "")})
+
+        offers = []
+        for t in bundle.get("texts", []):
+            offers.append(
+                {"label": t["label"], "heading": t.get("heading", ""), "text": t.get("text", "")}
+            )
+
+        option_labels = [o["label"] for o in offers] + ["I"]
+        return {
+            "items": profiles,
+            "offers": offers,
+            "option_labels": option_labels,
+        }
+
+    @staticmethod
+    def _present_single_choice(bundle: dict) -> list[dict]:
+        items = []
+        for q in bundle.get("questions", []):
+            items.append(
+                {
+                    "number": q["number"],
+                    "prompt": q.get("prompt", ""),
+                    "options": q.get("options", {}),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _present_ja_nein(bundle: dict) -> list[dict]:
+        items = []
+        for s in bundle.get("statements", []):
+            items.append(
+                {
+                    "number": s["number"],
+                    "statement": s.get("statement", ""),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _split_paragraphs(text: str) -> list[str]:
+        """Split raw reading text into non-empty stripped paragraphs."""
+        return [p.strip() for p in text.strip().split("\n") if p.strip()]
+
+    @staticmethod
+    def _present_essay(bundle: dict, question_meta: dict) -> dict:
+        """Extract writing prompt data for the student answer page.
+
+        The prompt.json is loaded under the 'prompt' bundle key. We expose
+        background, task_prompt, and writing_instructions, plus chart image
+        paths from manifest assets. No grading rubric is included.
+        """
+        prompt = bundle.get("prompt", {})
+        assets = question_meta.get("assets", {})
+        chart_images = assets.get("chart_images", [])
+
+        return {
+            "essay_background": prompt.get("background", ""),
+            "essay_task_prompt": prompt.get("task_prompt", ""),
+            "essay_instructions": prompt.get("writing_instructions", []),
+            "chart_images": chart_images,
+        }

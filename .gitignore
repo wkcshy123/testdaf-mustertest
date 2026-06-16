@@ -18,5 +18,8 @@ downloads/
 # Local generated question data
 question_bank/
 
+# Local student attempt data
+student_attempts/
+
 # Local reference PDFs
 Modelltest_01_*.pdf

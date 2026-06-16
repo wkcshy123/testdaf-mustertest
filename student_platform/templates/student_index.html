@@ -6,26 +6,33 @@
 <section class="page-head">
   <p class="muted">Student Practice System</p>
   <h1>学生答题系统</h1>
-  <p>本系统只读 <code>question_bank/</code>，不会访问或修改出题系统。当前阶段先提供题目选择和练习入口，作答协议会随学生系统逐步稳定。</p>
+  <p>选择题目开始练习。本系统只读 <code>question_bank/</code>，作答保存到 <code>student_attempts/</code>。</p>
+  <p class="muted">共 {{ total_count }} 道题目。</p>
 </section>
 
+{% for group in grouped %}
 <section class="panel">
-  <h2>可用题目包</h2>
-  <p class="muted">共 {{ question_count }} 条题目。</p>
-  {% if questions %}
+  <h2>{{ group.label }}（{{ group.count }} 题）</h2>
+  {% if group.questions %}
   <div class="table">
-    {% for question in questions %}
+    {% for question in group.questions %}
     <article class="table-row">
       <div>
         <strong>{{ question.title }}</strong><br>
-        <span class="muted">{{ question.section }} · {{ question.task_type }} · {{ question.topic }}</span>
+        <span class="muted">{{ question.task_type }} · {{ question.topic }}</span>
       </div>
-      <a class="button primary" href="/practice/{{ question.section }}/{{ question.task_type }}/{{ question.id }}">开始练习</a>
+      {% if group.supported %}
+      <a class="button primary"
+         href="/practice/{{ question.section }}/{{ question.task_type }}/{{ question.id }}">开始练习</a>
+      {% else %}
+      <span class="badge">即将支持</span>
+      {% endif %}
     </article>
     {% endfor %}
   </div>
   {% else %}
-  <p>暂无题目包。请先在出题系统中生成题目。</p>
+  <p class="muted">暂无题目。</p>
   {% endif %}
 </section>
+{% endfor %}
 {% endblock %}

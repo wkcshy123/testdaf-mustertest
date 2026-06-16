@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}作答记录 · {{ meta.title }}{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="muted">作答已保存</p>
+  <h1>{{ meta.title }}</h1>
+  <p class="muted">{{ meta.section }} · {{ meta.task_type }} · {{ meta.answer_mode }}</p>
+</section>
+
+<section class="panel">
+  <h2>作答信息</h2>
+  <div class="table">
+    <div class="table-row">
+      <span>题目 ID</span><strong>{{ meta.question_id }}</strong>
+    </div>
+    <div class="table-row">
+      <span>提交时间</span><strong>{{ meta.submitted_at }}</strong>
+    </div>
+    <div class="table-row">
+      <span>用时</span><strong>{{ meta.elapsed_seconds }} 秒 / 限时 {{ meta.time_limit_seconds }} 秒</strong>
+    </div>
+    {% if meta.timed_out %}
+    <div class="table-row">
+      <span>状态</span><strong class="warn">超时自动提交</strong>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>你的作答</h2>
+  {% if answers %}
+  <div class="table">
+    {% for number, value in answers.items() %}
+    <div class="table-row">
+      <span>第 {{ number }} 题</span>
+      <strong>{{ value if value else '（未作答）' }}</strong>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">未提交任何答案。</p>
+  {% endif %}
+  <p class="muted">参考答案与评分由评分系统提供，此处不展示。</p>
+</section>
+
+<div class="nav">
+  <a class="button" href="/">返回练习首页</a>
+  <a class="button" href="/attempts">查看全部作答记录</a>
+</div>
+{% endblock %}

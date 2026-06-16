@@ -1,28 +1,316 @@
 {% extends "base.html" %}
 
-{% block title %}练习 · {{ question.title }}{% endblock %}
+{% block title %}练习 · {{ view.title }}{% endblock %}
 
 {% block content %}
 <section class="page-head">
-  <p class="muted">{{ question.section }} · {{ question.task_type }}</p>
-  <h1>{{ question.title }}</h1>
-  <p>{{ question.topic }}</p>
+  <p class="muted">{{ view.section }} · {{ view.task_type }} · {{ view.answer_mode }}</p>
+  <h1>{{ view.title }}</h1>
+  <p>{{ view.topic }}</p>
 </section>
 
-<section class="panel">
-  <h2>题目资源</h2>
-  {% if bundle.manifest.assets.audio %}
-  <p><audio controls src="/question-bank/{{ bundle.path }}/{{ bundle.manifest.assets.audio }}"></audio></p>
-  {% endif %}
-  {% if bundle.preview %}
-  <div class="preview">{{ bundle.preview }}</div>
-  {% else %}
-  <p class="muted">该题目包暂无 preview。</p>
+<section class="panel timer-bar" id="timer-bar">
+  <div class="timer-info">
+    <span class="timer-label">剩余时间</span>
+    <span class="timer-display" id="timer-display">--:--</span>
+  </div>
+  {% if view.audio_file %}
+  <div class="audio-area" id="audio-area">
+    <p class="muted">听力播放（共 {{ view.play_count }} 次）</p>
+    <audio id="practice-audio" preload="auto"
+           src="/question-bank/{{ view.path }}/{{ view.audio_file }}"></audio>
+    <div class="audio-controls">
+      <button type="button" class="button primary" id="play-btn">▶ 播放音频</button>
+      <span class="play-count">已播放 <span id="play-count">0</span> / {{ view.play_count }}</span>
+    </div>
+    <p class="muted" id="audio-hint">可随时作答，音频可播放 {{ view.play_count }} 次。</p>
+  </div>
   {% endif %}
 </section>
 
-<section class="panel">
-  <h2>作答保存</h2>
-  <p class="muted">学生作答协议尚未最终固定。下一阶段将在这里接入按题型渲染的答题表单，并写入 <code>student_attempts/</code>。</p>
-</section>
+<form id="answer-form" method="post"
+      action="/practice/{{ view.section }}/{{ view.task_type }}/{{ view.question_id }}/submit">
+  <input type="hidden" name="elapsed_seconds" id="elapsed-input" value="0">
+  <input type="hidden" name="timed_out" id="timed-out-input" value="false">
+  <input type="hidden" name="answers_json" id="answers-input" value="">
+
+  {% if view.answer_mode == "short_text" %}
+  <section class="panel answer-area">
+    <h2>短答题（Stichwörter）</h2>
+    <p class="muted">用关键词简短回答每道题。</p>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.prompt }}</p>
+      {% if item.required_points and item.required_points > 1 %}
+      <p class="muted">需 {{ item.required_points }} 个要点</p>
+      {% endif %}
+      <input type="text" class="text-input" name="q_{{ item.number }}"
+             data-q-number="{{ item.number }}"
+             placeholder="关键词作答">
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "richtig_falsch" %}
+  <section class="panel answer-area">
+    <h2>正误判断（Richtig / Falsch）</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.statement }}</p>
+      <div class="radio-group" data-q-number="{{ item.number }}">
+        <label><input type="radio" name="q_{{ item.number }}" value="Richtig"> Richtig</label>
+        <label><input type="radio" name="q_{{ item.number }}" value="Falsch"> Falsch</label>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "matching" %}
+  <section class="panel answer-area">
+    <h2>匹配题（Zuordnung）</h2>
+    <div class="offers-grid">
+      {% for offer in view["offers"] %}
+      <div class="offer-card">
+        <strong>{{ offer.label }}. {{ offer.heading }}</strong>
+        <p class="muted">{{ offer.text[:120] }}…</p>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="matching-list">
+      {% for item in view["items"] %}
+      <div class="question-item">
+        <label class="q-number">{{ item.number }}.</label>
+        <p class="q-prompt">{{ item.need }}</p>
+        <select class="select-input" name="q_{{ item.number }}"
+                data-q-number="{{ item.number }}">
+          <option value="">— 选择 —</option>
+          {% for label in view.option_labels %}
+          <option value="{{ label }}">{{ label }}{% if label == 'I' %}（无匹配）{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% elif view.answer_mode == "single_choice_abc" %}
+  {% if view["reading_paragraphs"] %}
+  <section class="panel reading-text-area">
+    <h2>阅读文本（Lesetext）</h2>
+    <article class="reading-text">
+      {% for para in view["reading_paragraphs"] %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </article>
+  </section>
+  {% endif %}
+  <section class="panel answer-area">
+    <h2>单选题（A / B / C）</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.prompt }}</p>
+      <div class="radio-group" data-q-number="{{ item.number }}">
+        {% for key, text in item.options.items() %}
+        <label><input type="radio" name="q_{{ item.number }}" value="{{ key }}"> {{ key }}. {{ text }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "ja_nein_not_given" %}
+  {% if view["reading_paragraphs"] %}
+  <section class="panel reading-text-area">
+    <h2>阅读文本（Lesetext）</h2>
+    <article class="reading-text">
+      {% for para in view["reading_paragraphs"] %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </article>
+  </section>
+  {% endif %}
+  <section class="panel answer-area">
+    <h2>判断题（Ja / Nein / Text sagt dazu nichts）</h2>
+    {% for item in view["items"] %}
+    <div class="question-item">
+      <label class="q-number">{{ item.number }}.</label>
+      <p class="q-prompt">{{ item.statement }}</p>
+      <div class="radio-group" data-q-number="{{ item.number }}">
+        <label><input type="radio" name="q_{{ item.number }}" value="Ja"> Ja</label>
+        <label><input type="radio" name="q_{{ item.number }}" value="Nein"> Nein</label>
+        <label><input type="radio" name="q_{{ item.number }}" value="Text sagt dazu nichts"> Text sagt dazu nichts</label>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% elif view.answer_mode == "essay" %}
+  <section class="panel essay-prompt-area">
+    <h2>写作题目（Schriftlicher Ausdruck）</h2>
+    {% if view["essay_background"] %}
+    <div class="essay-background">
+      <h3>Hintergrund</h3>
+      <p>{{ view["essay_background"] }}</p>
+    </div>
+    {% endif %}
+    {% if view["chart_images"] %}
+    <div class="essay-charts">
+      {% for chart in view["chart_images"] %}
+      <figure>
+        <img src="/question-bank/{{ view.path }}/{{ chart }}" alt="Grafik {{ loop.index }}" class="essay-chart-img">
+        <figcaption>Grafik {{ loop.index }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="essay-task">
+      <h3>Thema</h3>
+      <p>{{ view["essay_task_prompt"] }}</p>
+    </div>
+    {% if view["essay_instructions"] %}
+    <div class="essay-instructions">
+      <h3>Bearbeiten Sie dabei die folgenden Punkte</h3>
+      <ul>
+        {% for ins in view["essay_instructions"] %}
+        <li>{{ ins }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel answer-area">
+    <h2>你的作文</h2>
+    <p class="muted">在下方输入你的德语作文。</p>
+    <textarea class="essay-textarea" name="essay_text" id="essay-textarea"
+              data-q-number="essay" placeholder="Hier schreiben Sie Ihren Text..."
+              rows="20"></textarea>
+  </section>
+
+  {% endif %}
+    <button type="submit" class="button primary" id="submit-btn">提交作答</button>
+    <span class="muted" id="submit-hint"></span>
+  </section>
+</form>
+
+<script>
+(function () {
+  var PLAYS_KEY = "practice_plays_{{ view.question_id }}";
+  var timer = null;
+  var elapsed = 0;
+
+  // --- Timer (all question types) ---
+  var QUESTION_KEY = "practice_elapsed_{{ view.question_id }}";
+  var timeLimit = {{ view.time_limit_seconds }};
+
+  try {
+    var saved = parseInt(sessionStorage.getItem(QUESTION_KEY) || "0", 10);
+    if (saved > 0) elapsed = saved;
+  } catch (e) {}
+
+  function saveElapsed() {
+    try { sessionStorage.setItem(QUESTION_KEY, String(elapsed)); } catch (e) {}
+  }
+
+  function renderTimer() {
+    var remaining = timeLimit - elapsed;
+    if (remaining <= 0) {
+      document.getElementById("timer-display").textContent = "00:00";
+      return;
+    }
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    document.getElementById("timer-display").textContent =
+      String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  renderTimer();
+  timer = setInterval(function () {
+    elapsed++;
+    saveElapsed();
+    var remaining = timeLimit - elapsed;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      document.getElementById("timer-display").textContent = "00:00";
+      document.getElementById("timed-out-input").value = "true";
+      document.getElementById("answer-form").submit();
+      return;
+    }
+    renderTimer();
+  }, 1000);
+
+  // --- Listening audio playback control (play count limit only) ---
+  {% if view.audio_file %}
+  var maxPlays = {{ view.play_count }};
+  var audio = document.getElementById("practice-audio");
+  var playBtn = document.getElementById("play-btn");
+  var playCountSpan = document.getElementById("play-count");
+  var audioHint = document.getElementById("audio-hint");
+
+  // Restore play count across refreshes
+  var playCount = 0;
+  try {
+    playCount = parseInt(sessionStorage.getItem(PLAYS_KEY) || "0", 10);
+  } catch (e) {}
+  playCountSpan.textContent = playCount;
+
+  if (playCount >= maxPlays) {
+    playBtn.disabled = true;
+    playBtn.textContent = "播放已结束";
+  }
+
+  playBtn.addEventListener("click", function () {
+    if (playCount >= maxPlays) return;
+    audio.play();
+  });
+
+  audio.addEventListener("play", function () {
+    playCount++;
+    playCountSpan.textContent = playCount;
+    try { sessionStorage.setItem(PLAYS_KEY, String(playCount)); } catch (e) {}
+    playBtn.disabled = true;
+    playBtn.textContent = "▶ 播放中…";
+  });
+
+  audio.addEventListener("ended", function () {
+    if (playCount >= maxPlays) {
+      playBtn.textContent = "播放已结束";
+    } else {
+      playBtn.disabled = false;
+      playBtn.textContent = "▶ 再次播放";
+      audioHint.textContent = "可再次播放（剩余 " + (maxPlays - playCount) + " 次）。";
+    }
+  });
+  {% endif %}
+
+  // --- Collect answers on submit ---
+  document.getElementById("answer-form").addEventListener("submit", function (e) {
+    if (timer) clearInterval(timer);
+    // Clean up sessionStorage so a fresh attempt starts from zero
+    try {
+      sessionStorage.removeItem("practice_elapsed_{{ view.question_id }}");
+      sessionStorage.removeItem(PLAYS_KEY);
+    } catch (e) {}
+    document.getElementById("elapsed-input").value = elapsed;
+    var answers = {};
+    this.querySelectorAll("[data-q-number]").forEach(function (el) {
+      var num = el.getAttribute("data-q-number");
+      if (el.type === "radio") {
+        // handled by name below
+      } else {
+        answers[num] = el.value;
+      }
+    });
+    // collect radio groups
+    this.querySelectorAll("input[type=radio]:checked").forEach(function (el) {
+      var num = el.name.replace("q_", "");
+      answers[num] = el.value;
+    });
+    document.getElementById("answers-input").value = JSON.stringify(answers);
+  });
+})();
+</script>
 {% endblock %}
