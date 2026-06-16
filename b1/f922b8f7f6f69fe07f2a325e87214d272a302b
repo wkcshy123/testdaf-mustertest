@@ -1,0 +1,28 @@
+testdaf_platform/templates/index.html
+  s_f99705420eaa20::t_98a8e27b4cdd83 29-30
+.gitignore
+  h_457e6c07e9b1d2 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b1f922b8f7f6f69fe07f2a325e87214d272a302b",
+  "prompts": {},
+  "humans": {
+    "h_457e6c07e9b1d2": {
+      "author": "wkcshy123 <zhufeng19960708@icloud.com>"
+    }
+  },
+  "sessions": {
+    "s_f99705420eaa20": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a2f66d1bc68373a5c90b5ec",
+        "model": "gpt-5.5__max"
+      },
+      "human_author": "wkcshy123 <zhufeng19960708@icloud.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
