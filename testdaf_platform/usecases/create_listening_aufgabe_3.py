@@ -1,0 +1,97 @@
+"""Use case for creating Listening Aufgabe 3 question packages."""
+
+from dataclasses import dataclass
+
+from testdaf_platform.services.listening_aufgabe_3 import (
+    ListeningAufgabe3Generator,
+    ListeningAufgabe3Input,
+)
+from testdaf_platform.services.multi_speaker_tts import MultiSpeakerTTSService
+from testdaf_platform.services.reference_materials import ReferenceMaterialService
+from testdaf_platform.storage.question_bank import QuestionBank, QuestionManifest
+
+
+@dataclass(frozen=True)
+class CreateListeningAufgabe3Request:
+    topic: str
+    expert_domain: str
+    reference_material: str
+    reference_urls: str
+    difficulty: str
+    question_focus_mix: str
+    multi_point_questions: int
+    speech_speed: str
+    host_voice: str
+    expert_voice: str
+
+
+class CreateListeningAufgabe3UseCase:
+    """Coordinate generation, TTS, and storage for Listening Aufgabe 3."""
+
+    def __init__(
+        self,
+        *,
+        reference_material_service: ReferenceMaterialService,
+        generator: ListeningAufgabe3Generator,
+        multi_speaker_tts_service: MultiSpeakerTTSService,
+        question_bank: QuestionBank,
+    ) -> None:
+        self.reference_material_service = reference_material_service
+        self.generator = generator
+        self.multi_speaker_tts_service = multi_speaker_tts_service
+        self.question_bank = question_bank
+
+    def execute(self, *, api_key: str, request: CreateListeningAufgabe3Request) -> QuestionManifest:
+        topic = request.topic.strip()
+        expert_domain = request.expert_domain.strip()
+        normalized_multi_point = max(0, min(int(request.multi_point_questions), 3))
+        reference_bundle = self.reference_material_service.build(
+            request.reference_material,
+            request.reference_urls,
+        )
+        generation = self.generator.generate(
+            api_key,
+            ListeningAufgabe3Input(
+                topic=topic,
+                expert_domain=expert_domain,
+                reference_material=reference_bundle.combined_text,
+                difficulty=request.difficulty,
+                question_focus_mix=request.question_focus_mix,
+                multi_point_questions=normalized_multi_point,
+            ),
+        )
+
+        question_id = self.question_bank.new_question_id()
+        question_dir = self.question_bank.get_question_dir("listening", "aufgabe_3", question_id)
+        speaker_voice_map = _build_voice_map(request.host_voice, request.expert_voice)
+        audio_result = self.multi_speaker_tts_service.synthesize_dialogue(
+            api_key=api_key,
+            segments=generation["segments"],
+            speaker_voice_map=speaker_voice_map,
+            output_dir=question_dir,
+        )
+
+        return self.question_bank.save_listening_aufgabe_3(
+            question_id=question_id,
+            topic_input=topic,
+            expert_domain_input=expert_domain,
+            reference_material=reference_bundle.combined_text,
+            difficulty=request.difficulty,
+            question_focus_mix=request.question_focus_mix,
+            multi_point_questions=normalized_multi_point,
+            speech_speed=request.speech_speed,
+            speaker_voice_map=speaker_voice_map,
+            generation=generation,
+            audio_filename=audio_result.path.name,
+            audio_size_kb=audio_result.size_kb,
+            segment_files=audio_result.segment_files,
+            reference_sources=reference_bundle.sources,
+        )
+
+
+def _build_voice_map(speaker_a_voice: str, speaker_b_voice: str) -> dict[str, str]:
+    if speaker_a_voice != speaker_b_voice:
+        return {"A": speaker_a_voice, "B": speaker_b_voice}
+
+    fallback = "Ethan" if speaker_a_voice != "Ethan" else "Cherry"
+    return {"A": speaker_a_voice, "B": fallback}
