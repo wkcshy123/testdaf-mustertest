@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}暂不支持 · {{ question.title }}{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <h1>{{ question.title }}</h1>
+  <p class="muted">{{ question.section }} · {{ question.task_type }}</p>
+</section>
+
+<section class="panel">
+  <h2>该题型暂不支持在线答题</h2>
+  <p>当前学生系统第一期仅支持听力（A1-A3）和阅读（R1-R3）的客观题练习。</p>
+  <p class="muted">写作和口语答题将在后续版本中实现。</p>
+</section>
+
+<div class="nav">
+  <a class="button" href="/">返回练习首页</a>
+</div>
+{% endblock %}

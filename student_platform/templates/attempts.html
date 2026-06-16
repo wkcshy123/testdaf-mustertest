@@ -5,7 +5,7 @@
 {% block content %}
 <section class="page-head">
   <h1>作答记录</h1>
-  <p class="muted">当前目录中共有 {{ attempt_count }} 个作答包。</p>
+  <p class="muted">共 {{ attempt_count }} 条记录。</p>
 </section>
 
 <section class="panel">
@@ -13,12 +13,23 @@
   <div class="table">
     {% for attempt in attempts %}
     <article class="table-row">
-      <strong>{{ attempt }}</strong>
+      <div>
+        <strong>{{ attempt.title }}</strong><br>
+        <span class="muted">{{ attempt.section }} · {{ attempt.task_type }} · {{ attempt.submitted_at }}</span>
+        {% if attempt.timed_out %}
+        <span class="badge warn">超时</span>
+        {% endif %}
+      </div>
+      <a class="button" href="/attempt/{{ attempt.attempt_id }}">查看详情</a>
     </article>
     {% endfor %}
   </div>
   {% else %}
-  <p>暂无作答记录。下一阶段提交练习后会写入 <code>student_attempts/</code>。</p>
+  <p class="muted">暂无作答记录。开始练习后会在这里显示。</p>
   {% endif %}
 </section>
+
+<div class="nav">
+  <a class="button" href="/">返回练习首页</a>
+</div>
 {% endblock %}
