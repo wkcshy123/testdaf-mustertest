@@ -8,7 +8,7 @@ wheels/
 downloads/
 # Virtual environments
 .venv
-
+/tmp
 # uv / Python version
 .python-version
 
@@ -16,7 +16,7 @@ downloads/
 .DS_Store
 
 # Local generated question data
-question_bank/
+/question_bank/
 
 # Local student attempt data
 student_attempts/
