@@ -83,8 +83,6 @@ def score_attempt(attempt_id: str) -> dict | None:
 
 def list_graded_attempts(student_id: str | None = None) -> list[dict]:
     results = []
-    if not GRADING_RESULTS_DIR.exists():
-        return results
 
     from scoring_platform.config import STUDENT_ATTEMPTS_DIR
 
