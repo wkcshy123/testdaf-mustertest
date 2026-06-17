@@ -4,6 +4,7 @@ import time
 
 import dashscope
 import dashscope.common.constants as _ds_const
+import requests
 from dashscope import Generation, MultiModalConversation
 
 from testdaf_platform.config import DASHSCOPE_BASE_URL, QWEN_TEXT_MODEL
@@ -18,7 +19,8 @@ _ba.DEFAULT_REQUEST_TIMEOUT_SECONDS = 600
 
 
 MULTIMODAL_TEXT_MODEL_PREFIXES = ("qwen3.7", "qwen3.6", "qwen3.5")
-TEXT_GENERATION_REQUEST_RETRIES = 1
+TEXT_GENERATION_REQUEST_RETRIES = 3
+DEFAULT_FALLBACK_TEXT_MODELS = ("qwen3.6-flash",)
 
 
 class TextGenerationClient:
@@ -32,7 +34,12 @@ class TextGenerationClient:
     ):
         self.model = model
         self.base_url = base_url
-        self.fallback_models = tuple(fallback_models or ())
+        if fallback_models is None:
+            self.fallback_models = tuple(
+                fallback for fallback in DEFAULT_FALLBACK_TEXT_MODELS if fallback != model
+            )
+        else:
+            self.fallback_models = tuple(fallback_models)
 
     def generate_text(
         self,

@@ -30,7 +30,10 @@ from pypinyin import pinyin, Style
 
 app = FastAPI(title="Scoring Platform")
 
-_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(Path(__file__).parent / "templates")))
+_jinja_env = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(str(Path(__file__).parent / "templates")),
+    autoescape=jinja2.select_autoescape(["html", "xml"]),
+)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="score_static")
 
 account_store = AccountStore(STUDENTS_DIR)
@@ -52,6 +55,32 @@ def _render(tpl: str, request: Request, **extra) -> HTMLResponse:
     ctx = _ctx(request, **extra)
     template = _jinja_env.get_template(tpl)
     return HTMLResponse(template.render(ctx))
+
+
+def _is_teacher(user: dict | None) -> bool:
+    return bool(user and user.get("role") == "teacher")
+
+
+def _redirect_if_not_logged_in(user: dict | None) -> RedirectResponse | None:
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    return None
+
+
+def _redirect_if_not_teacher(user: dict | None) -> RedirectResponse | None:
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    if not _is_teacher(user):
+        return RedirectResponse(url="/student", status_code=303)
+    return None
+
+
+def _can_view_attempt(user: dict, result: dict) -> bool:
+    return _is_teacher(user) or result.get("student_id") == user.get("student_id")
+
+
+def _can_view_exam(user: dict, exam: dict) -> bool:
+    return _is_teacher(user) or exam.get("student_id") == user.get("student_id")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -146,22 +175,26 @@ def student_list(request: Request):
 @app.get("/score/{attempt_id}", response_class=HTMLResponse)
 def score_detail(request: Request, attempt_id: str):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_logged_in(user):
+        return redirect
     result = score_attempt(attempt_id)
     if not result:
         return _render("student_home.html", request)
+    if not _can_view_attempt(user, result):
+        return RedirectResponse(url="/student", status_code=303)
     return _render("score_objective.html", request, result=result)
 
 
 @app.get("/score/exam/{exam_id}", response_class=HTMLResponse)
 def score_exam(request: Request, exam_id: str):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_logged_in(user):
+        return redirect
     exam = build_exam_summary(exam_id)
     if not exam:
         return _render("student_home.html", request)
+    if not _can_view_exam(user, exam):
+        return RedirectResponse(url="/student", status_code=303)
     return _render("score_exam.html", request, exam=exam)
 
 
@@ -174,8 +207,8 @@ def _latest_time(sid: str) -> str:
 @app.get("/teacher", response_class=HTMLResponse)
 def teacher_home(request: Request):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_teacher(user):
+        return redirect
 
     sort = request.query_params.get("sort", "name")
     all_students = [s for s in list_all_students() if s.get("role") != "teacher"]
@@ -222,8 +255,8 @@ def teacher_home(request: Request):
 @app.get("/teacher/student/{student_id}", response_class=HTMLResponse)
 def teacher_student_view(request: Request, student_id: str):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_teacher(user):
+        return redirect
 
     results = list_graded_attempts(student_id)
     latest_practice = {}
@@ -263,8 +296,8 @@ def save_student_speaking(
     a4: str = Form(""), a5: str = Form(""), a6: str = Form(""), a7: str = Form(""),
 ):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_teacher(user):
+        return redirect
 
     student_name = student_id
     for s in list_all_students():
@@ -286,8 +319,8 @@ def save_student_speaking(
 @app.get("/teacher/export/word")
 def teacher_export_word(request: Request):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_teacher(user):
+        return redirect
     sort = request.query_params.get("sort", "name")
     data = export_word_all_students(sort=sort)
     return StreamingResponse(
@@ -300,8 +333,8 @@ def teacher_export_word(request: Request):
 @app.get("/teacher/export/word/{student_id}")
 def teacher_export_student_word(request: Request, student_id: str):
     user = get_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+    if redirect := _redirect_if_not_teacher(user):
+        return redirect
     data = export_word_student(student_id)
     return StreamingResponse(
         iter([data]),

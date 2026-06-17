@@ -20,6 +20,10 @@ class ListeningAufgabe3Result(NamedTuple):
     manifest: QuestionManifest
     generation: dict
 
+    @property
+    def id(self) -> str:
+        return self.manifest.id
+
 
 @dataclass(frozen=True)
 class CreateListeningAufgabe3Request:
@@ -63,19 +67,23 @@ class CreateListeningAufgabe3UseCase:
             request.reference_material,
             request.reference_urls,
         )
-        generation = self.generator.generate(
-            api_key,
-            ListeningAufgabe3Input(
-                topic=topic,
-                expert_domain=expert_domain,
-                reference_material=reference_bundle.combined_text,
-                difficulty=request.difficulty,
-                question_focus_mix=request.question_focus_mix,
-                multi_point_questions=normalized_multi_point,
-                speaker_genders=speaker_genders,
-            ),
-            progress_callback=progress_callback,
+        generator_input = ListeningAufgabe3Input(
+            topic=topic,
+            expert_domain=expert_domain,
+            reference_material=reference_bundle.combined_text,
+            difficulty=request.difficulty,
+            question_focus_mix=request.question_focus_mix,
+            multi_point_questions=normalized_multi_point,
+            speaker_genders=speaker_genders,
         )
+        if progress_callback is None:
+            generation = self.generator.generate(api_key, generator_input)
+        else:
+            generation = self.generator.generate(
+                api_key,
+                generator_input,
+                progress_callback=progress_callback,
+            )
 
         instructions = self.instruction_generator.generate(
             api_key=api_key,
@@ -118,4 +126,3 @@ class CreateListeningAufgabe3UseCase:
             ),
             generation=generation,
         )
-

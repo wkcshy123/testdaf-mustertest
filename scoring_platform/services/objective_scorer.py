@@ -53,7 +53,11 @@ def _load_answer_items(question_id: str, answer_mode: str) -> list[dict] | None:
 
 
 def _check_short_text(student_answer: str, correct: dict) -> bool:
-    acceptable = [correct.get("answer", "").strip().lower()]
+    answer = correct.get("answer", "")
+    if isinstance(answer, list):
+        acceptable = [str(item).strip().lower() for item in answer]
+    else:
+        acceptable = [str(answer).strip().lower()]
     variants = correct.get("acceptable_variants", [])
     if isinstance(variants, list):
         acceptable.extend(v.strip().lower() for v in variants if isinstance(v, str))
@@ -65,11 +69,13 @@ def _check_choice(student_answer: str, correct: dict) -> bool:
     return (student_answer or "").strip().upper() == str(correct.get("answer", "")).strip().upper()
 
 
-def _check_matching(student_answer: dict, correct: dict) -> bool:
-    correct_pairs = correct.get("answer", {})
-    if not isinstance(correct_pairs, dict) or not isinstance(student_answer, dict):
-        return False
-    return all(correct_pairs.get(k) == student_answer.get(k) for k in correct_pairs)
+def _check_matching(student_answer: str | dict, correct: dict) -> bool:
+    correct_answer = correct.get("answer", "")
+    if isinstance(correct_answer, dict):
+        if not isinstance(student_answer, dict):
+            return False
+        return all(correct_answer.get(k) == student_answer.get(k) for k in correct_answer)
+    return str(student_answer or "").strip().upper() == str(correct_answer).strip().upper()
 
 
 CHECK_FUNCTIONS = {
@@ -125,7 +131,7 @@ def score_objective(attempt_meta: dict, student_answers: dict | list) -> dict | 
         errors = []
         for item in task_items:
             num = item.get("number", 0)
-            student_val = answers_dict.get(str(num), "")
+            student_val = answers_dict.get(str(num), answers_dict.get(f"q_{num}", ""))
             is_correct = checker(student_val, item)
             if is_correct:
                 correct_count += 1

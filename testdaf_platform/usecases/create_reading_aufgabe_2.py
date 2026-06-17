@@ -12,6 +12,10 @@ class ReadingAufgabe2Result(NamedTuple):
     manifest: QuestionManifest
     generation: dict
 
+    @property
+    def id(self) -> str:
+        return self.manifest.id
+
 
 @dataclass(frozen=True)
 class CreateReadingAufgabe2Request:

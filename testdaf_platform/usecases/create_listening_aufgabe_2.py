@@ -19,6 +19,10 @@ class ListeningAufgabe2Result(NamedTuple):
     manifest: QuestionManifest
     generation: dict
 
+    @property
+    def id(self) -> str:
+        return self.manifest.id
+
 
 @dataclass(frozen=True)
 class CreateListeningAufgabe2Request:
@@ -63,18 +67,22 @@ class CreateListeningAufgabe2UseCase:
             request.reference_material,
             request.reference_urls,
         )
-        generation = self.generator.generate(
-            api_key,
-            ListeningAufgabe2Input(
-                topic=topic,
-                reference_material=reference_bundle.combined_text,
-                difficulty=request.difficulty,
-                information_flow=request.information_flow,
-                statement_balance=request.statement_balance,
-                speaker_genders=speaker_genders,
-            ),
-            progress_callback=progress_callback,
+        generator_input = ListeningAufgabe2Input(
+            topic=topic,
+            reference_material=reference_bundle.combined_text,
+            difficulty=request.difficulty,
+            information_flow=request.information_flow,
+            statement_balance=request.statement_balance,
+            speaker_genders=speaker_genders,
         )
+        if progress_callback is None:
+            generation = self.generator.generate(api_key, generator_input)
+        else:
+            generation = self.generator.generate(
+                api_key,
+                generator_input,
+                progress_callback=progress_callback,
+            )
 
         instructions = self.instruction_generator.generate(
             api_key=api_key,
