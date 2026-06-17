@@ -19,8 +19,43 @@ HARD_MAX_TRANSCRIPT_BYTES = 5050
 MAX_LENGTH_REPAIR_ATTEMPTS = 3
 MAX_STRUCTURE_RETRY_ATTEMPTS = 2
 ALLOWED_SPEAKERS = {"A", "B", "C"}
+OPTIONAL_SPEAKER = "D"
+ALL_VALID_SPEAKERS = {"A", "B", "C", "D"}
 ALLOWED_PAUSES = {200, 350, 500, 750, 1000}
 VALID_ANSWERS = {"Richtig", "Falsch"}
+
+
+def _reorder_by_evidence(payload: dict, items_key: str, text_key: str, *, start_number: int) -> dict:
+    items = payload.get(items_key, [])
+    text = payload.get(text_key, "")
+    if not items or not text:
+        return payload
+
+    anchored: list[tuple[int, dict]] = []
+    unanchored: list[dict] = []
+    for item in items:
+        evidence = str(item.get("evidence", ""))
+        pos = text.find(evidence) if evidence else -1
+        if pos >= 0:
+            anchored.append((pos, item))
+        else:
+            unanchored.append(item)
+
+    anchored.sort(key=lambda entry: entry[0])
+    reordered = [item for _, item in anchored] + unanchored
+    for idx, item in enumerate(reordered):
+        item["number"] = start_number + idx
+
+    payload[items_key] = reordered
+    return payload
+
+
+def _gendered_speakers_text(genders: dict[str, str]) -> str:
+    parts = []
+    for sid, gender in genders.items():
+        label = "女性" if gender == "female" else "男性"
+        parts.append(f"说话人 {sid} 必须是{label}角色")
+    return "；".join(parts) + "。请自动决定合适的身份（如教授、研究员、医生等）。"
 
 
 class Aufgabe2TranscriptLengthError(RuntimeError):
@@ -41,6 +76,7 @@ class ListeningAufgabe2Input:
     difficulty: str
     information_flow: str
     statement_balance: str
+    speaker_genders: dict[str, str]
 
 
 class ListeningAufgabe2Generator:
@@ -50,10 +86,26 @@ class ListeningAufgabe2Generator:
         self.model = model
         self.client = TextGenerationClient(model=model)
 
-    def generate(self, api_key: str, data: ListeningAufgabe2Input) -> dict:
+    def generate(self, api_key: str, data: ListeningAufgabe2Input, *, progress_callback=None) -> dict:
         last_error: RuntimeError | None = None
+        last_error_hash: int | None = None
+        error_repeat_count = 0
+
         for structure_attempt in range(MAX_STRUCTURE_RETRY_ATTEMPTS + 1):
+            if progress_callback:
+                if structure_attempt == 0:
+                    progress_callback(10, "调用文本模型生成访谈初稿...")
+                else:
+                    progress_callback(25, f"结构修复第 {structure_attempt}/{MAX_STRUCTURE_RETRY_ATTEMPTS} 次，重新生成...")
+
             payload = self._normalize_payload(self._generate_initial_payload(api_key, data))
+
+            if progress_callback:
+                progress_callback(60, "初稿完成，结构验证中...")
+
+            last_bytes: int | None = None
+            stuck_count = 0
+
             try:
                 for attempt in range(MAX_LENGTH_REPAIR_ATTEMPTS + 1):
                     self._validate_structure(payload)
@@ -61,14 +113,37 @@ class ListeningAufgabe2Generator:
                     current_bytes = self._transcript_bytes(payload)
 
                     if MIN_TRANSCRIPT_BYTES <= current_bytes <= MAX_TRANSCRIPT_BYTES:
-                        return self._with_length_metadata(payload, "ideal")
+                        if progress_callback:
+                            progress_callback(95, "答案排序与元数据写入中...")
+                        return self._with_length_metadata(
+                            _reorder_by_evidence(payload, "statements", "transcript", start_number=9), "ideal"
+                        )
 
                     if attempt >= MAX_LENGTH_REPAIR_ATTEMPTS:
                         if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
-                            return self._with_length_metadata(payload, "accepted_with_warning")
+                            if progress_callback:
+                                progress_callback(95, "答案排序与元数据写入中...")
+                            return self._with_length_metadata(
+                                _reorder_by_evidence(payload, "statements", "transcript", start_number=9),
+                                "accepted_with_warning",
+                            )
                         raise Aufgabe2TranscriptLengthError(current_bytes)
 
+                    if current_bytes == last_bytes:
+                        stuck_count += 1
+                        if stuck_count >= 2:
+                            raise RuntimeError(
+                                f"生成陷入死循环：transcript 长度连续 {stuck_count + 1} 次停留在 {current_bytes} bytes，"
+                                f"已自动终止。请尝试更换主题或降低难度后重新生成。"
+                            )
+                    else:
+                        stuck_count = 0
+                        last_bytes = current_bytes
+
+                    repair_pct = 65 + attempt * 10
                     if current_bytes < MIN_TRANSCRIPT_BYTES:
+                        if progress_callback:
+                            progress_callback(repair_pct, f"长度偏短，扩写第 {attempt + 1}/{MAX_LENGTH_REPAIR_ATTEMPTS} 次...")
                         payload = self._expand_segments(
                             api_key=api_key,
                             data=data,
@@ -77,6 +152,8 @@ class ListeningAufgabe2Generator:
                             attempt=attempt + 1,
                         )
                     else:
+                        if progress_callback:
+                            progress_callback(repair_pct, f"长度偏长，压缩第 {attempt + 1}/{MAX_LENGTH_REPAIR_ATTEMPTS} 次...")
                         payload = self._compress_segments(
                             api_key=api_key,
                             data=data,
@@ -86,6 +163,18 @@ class ListeningAufgabe2Generator:
                         )
             except RuntimeError as exc:
                 last_error = exc
+                err_hash = hash(str(exc))
+                if err_hash == last_error_hash:
+                    error_repeat_count += 1
+                    if error_repeat_count >= 2:
+                        raise RuntimeError(
+                            f"生成陷入结构死循环：相同错误已重复 {error_repeat_count + 1} 次 — {exc}。"
+                            f"已自动终止。请尝试更换主题或降低难度后重新生成。"
+                        ) from exc
+                else:
+                    error_repeat_count = 0
+                last_error_hash = err_hash
+
                 if structure_attempt >= MAX_STRUCTURE_RETRY_ATTEMPTS or not self._should_regenerate(exc):
                     raise
 
@@ -101,10 +190,10 @@ class ListeningAufgabe2Generator:
         content = self.client.generate_text(
             api_key=api_key,
             messages=[
-                {"role": "system", "content": self._system_prompt()},
+                {"role": "system", "content": self._system_prompt(data)},
                 {"role": "user", "content": self._user_prompt(data)},
             ],
-            max_tokens=9000,
+            max_tokens=15000,
         )
 
         return self._parse_json(content)
@@ -176,27 +265,41 @@ class ListeningAufgabe2Generator:
         replacements = self._extract_repair_segments(repair)
         return self._replace_segments(payload, replacements)
 
-    def _system_prompt(self) -> str:
+    def _system_prompt(self, data: ListeningAufgabe2Input) -> str:
+        gender_text = _gendered_speakers_text(data.speaker_genders)
         return (
+            f"{gender_text}"
+            "这是强制硬约束——如果指定某说话人为男性，则该角色只能是男性名字和男性身份；"
+            "如果指定为女性，则只能是女性名字和女性身份。性别错配的生成视为不合格。\n"
             "你是 TestDaF Hörverstehen 出题专家，负责生成 TestDaF 听力第二题 Hörtext 2 的完整结构化物料。"
             "TestDaF 是面向准备进入德国高校学习者的德语考试，听力第二题通常是广播专题、主持人访谈或专家讨论。"
             "Hörtext 2 播放一次，共 10 道 Richtig/Falsch 判断题，题号为 9-18，学生判断陈述是否与听力内容一致。"
+            "对话文本中禁止出现括号标注的情绪提示或舞台提示，如 (lacht)、(seufzt)、"
+            "(stöhnt)、(überlegt) 等——这是一段纯语音访谈，不是剧本。"
+            "如需表达情感，请写入口语感叹词（如 Ach!、Oh!、Na ja...、Hm.），"
+            "并由 pause_reason 标注情绪转折（如 thinking、hesitation、sigh、amusement）。"
             "材料应体现较高信息密度，包含事实、观点、评价、条件、例子、限制和不同说话人的立场。"
-            "访谈必须有三个说话人：A 是主持人，B 和 C 是专家、研究者、顾问、大学工作人员或相关领域嘉宾。"
+            "访谈可以有三个或四个说话人：A 必须是主持人，B/C/D 身份由系统根据性别自动决定"
+            "（如 Experte/Expertin、Student/Studentin、Forscher/Forscherin 等），"
+            "不能全是专家身份，可包含学生、市民、行业从业者等多类型角色。"
             "用词、句式、说话方式和语气必须同时符合说话人身份、广播访谈场景、具体主题以及老师指定的难度。"
             "standard 难度应符合 B2-C1；easy 应减少嵌套句和抽象名词；hard 可以增加学术表达、让步结构和观点区分。"
             "不要让所有角色说同一种话：主持人应负责引入、追问和总结，专家应给出解释、评价、例子和限制条件。"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外的任何文字。"
             "输出顶层字段必须包含 title、topic、speaker_roles、format_note、transcript、segments、statements。"
             "transcript 必须是自然德语访谈，UTF-8 byte length 目标约 4623，允许范围 4400-4850。"
-            "transcript 必须能由 segments 按顺序还原为 A:/B:/C: 标注的完整访谈。"
+            "transcript 必须能由 segments 按顺序还原为说话人标注的完整访谈。"
             "每个 segment 只能包含一个说话人的连续发言，并包含 index、speaker_id、speaker_role、text、pause_after_ms、pause_reason。"
             "pause_after_ms 只能从 200、350、500、750、1000 中选择。"
+            "200 毫秒仅用于被打断或急切抢答；正常接话使用 350 或 500；"
+            "重要信息、观点结论或专家回答后使用 500 或 750；"
+            "话题转换、主持人总结或段落结束使用 750 或 1000，确保访谈衔接自然不抢话。"
             "pause_reason 用英文短标签，例如 host_transition、normal_turn_switch、thinking、topic_shift、important_information、summary。"
             "statements 必须恰好 10 个元素，number 必须为 9-18，answer 只能是 Richtig 或 Falsch。"
             "每个 statement 必须包含 number、statement、answer、evidence、tested_information、distractor_type、distractor_explanation。"
             "Falsch 陈述必须通过真实考试常见干扰构造，例如 subject_swap、degree_shift、causal_inversion、negation_shift、missing_condition、time_shift。"
             "Richtig 陈述也不能照抄原文，必须使用自然改写，但含义必须被原文明确支持。"
+            "每道题的 evidence 必须能在 transcript 中找到对应的原文片段；statements 必须按 evidence 在 transcript 中的出现顺序排列。"
         )
 
     def _user_prompt(self, data: ListeningAufgabe2Input) -> str:
@@ -222,7 +325,8 @@ class ListeningAufgabe2Generator:
             f"- 参考素材：{reference}\n"
             f"- 难度：{data.difficulty}\n"
             f"- 信息流控制：{data.information_flow}\n"
-            f"- R/F 分布：{data.statement_balance}\n\n"
+            f"- R/F 分布：{data.statement_balance}\n"
+            f"- 说话人性别：{_gendered_speakers_text(data.speaker_genders)}\n\n"
             f"难度语言规则：{difficulty_instruction}\n"
             "请特别注意：用词、说话方式、礼貌程度、学术性、句子长度和信息密度都要匹配角色身份、广播访谈场景和难度。\n\n"
             f"题目顺序规则：{flow_instruction}\n"
@@ -234,14 +338,14 @@ class ListeningAufgabe2Generator:
             "- 不要为了凑长度重复无意义内容。\n\n"
             "访谈结构要求：\n"
             "- A 必须是主持人，负责引入话题、转接问题、追问细节和简短总结。\n"
-            "- B 和 C 必须是两个身份不同但主题相关的专家或嘉宾。\n"
+            "- B 和 C 必须是两个身份不同但主题相关的专家或嘉宾；如果输出包含 D，D 也可以是嘉宾、学生代表或社区成员。\n"
             "- B 和 C 应有不同视角，不能只是重复彼此观点。\n"
             "- 内容应像真实广播访谈，不要像课堂讲稿或考试说明。\n\n"
             "停顿要求：\n"
             "- 每个 segment 后必须给出 pause_after_ms。\n"
-            "- 普通接话使用 200 或 350。\n"
+            "- 200 毫秒仅用于被打断或急切抢答；正常接话使用 350 或 500。\n"
             "- 重要事实、观点结论或限定条件后使用 500 或 750。\n"
-            "- 话题转换、主持人总结或段落结束可使用 750 或 1000。\n"
+            "- 话题转换、主持人总结或段落结束可使用 750 或 1000，确保访谈衔接自然不抢话。\n"
             "- 不要依赖 SSML、特殊占位符或括号说明来控制停顿。\n\n"
             "请严格输出以下 JSON 结构：\n"
             "{\n"
@@ -249,8 +353,8 @@ class ListeningAufgabe2Generator:
             '  "topic": "主题标签或主题短语",\n'
             '  "speaker_roles": {\n'
             '    "A": "Moderator/in",\n'
-            '    "B": "专家或嘉宾身份",\n'
-            '    "C": "专家或嘉宾身份"\n'
+            '    "B": "嘉宾身份",\n'
+            '    "C": "嘉宾身份"\n'
             "  },\n"
             '  "format_note": "kurzes Radiointerview / Expertengespräch",\n'
             '  "transcript": "A: ...\\nB: ...\\nC: ...",\n'
@@ -287,7 +391,7 @@ class ListeningAufgabe2Generator:
             "新增内容必须符合广播访谈语境，补充背景解释、专家观点、例子、限制条件、反问或主持人追问。"
             "新增内容的用词、说话方式和语气必须符合角色身份、场景和难度。"
             "不要改变已有 10 道 R/F 题的答案，不要引入与原访谈冲突的新事实。"
-            "speaker_id 只能是 A、B 或 C；A 是主持人，B/C 是专家或嘉宾。"
+            "speaker_id 只能是 A、B、C 或 D；A 是主持人，B/C/D 是嘉宾。"
             "pause_after_ms 只能从 200、350、500、750、1000 中选择。"
             "输出格式为：{\"insert_after_index\": 5, \"segments\": [...]}"
         )
@@ -385,10 +489,14 @@ class ListeningAufgabe2Generator:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-            if not match:
-                raise RuntimeError("无法从 API 响应中解析 JSON")
-            return json.loads(match.group(0))
+            try:
+                result, _ = json.JSONDecoder().raw_decode(cleaned)
+                return result
+            except json.JSONDecodeError:
+                match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+                if not match:
+                    raise RuntimeError("无法从 API 响应中解析 JSON")
+                return json.loads(match.group(0))
 
     def _validate_structure(self, payload: dict) -> None:
         required_keys = {
@@ -406,7 +514,7 @@ class ListeningAufgabe2Generator:
 
         speaker_roles = payload["speaker_roles"]
         if not isinstance(speaker_roles, dict) or ALLOWED_SPEAKERS - speaker_roles.keys():
-            raise RuntimeError("speaker_roles 必须是包含 A、B、C 的对象")
+            raise RuntimeError("speaker_roles 必须是包含 A、B、C 的对象（D 可选）")
 
         segments = payload["segments"]
         if not isinstance(segments, list) or len(segments) < 14:
@@ -419,13 +527,13 @@ class ListeningAufgabe2Generator:
             for key in ("speaker_id", "speaker_role", "text", "pause_after_ms", "pause_reason"):
                 if key not in segment:
                     raise RuntimeError(f"第 {index} 段缺少字段：{key}")
-            if segment["speaker_id"] not in ALLOWED_SPEAKERS:
-                raise RuntimeError(f"第 {index} 段 speaker_id 必须是 A、B 或 C")
+            if segment["speaker_id"] not in ALL_VALID_SPEAKERS:
+                raise RuntimeError(f"第 {index} 段 speaker_id 必须是 A、B、C 或 D")
             if int(segment["pause_after_ms"]) not in ALLOWED_PAUSES:
                 raise RuntimeError(f"第 {index} 段 pause_after_ms 不在允许档位中")
             seen_speakers.add(segment["speaker_id"])
 
-        if seen_speakers != ALLOWED_SPEAKERS:
+        if not seen_speakers.issuperset(ALLOWED_SPEAKERS):
             raise RuntimeError("segments 必须同时包含 A、B、C 三个说话人")
 
         statements = payload["statements"]
@@ -509,8 +617,8 @@ class ListeningAufgabe2Generator:
         normalized_new_segments = []
         for segment in new_segments:
             speaker_id = segment.get("speaker_id")
-            if speaker_id not in ALLOWED_SPEAKERS:
-                raise RuntimeError("扩写片段 speaker_id 必须是 A、B 或 C")
+            if speaker_id not in ALL_VALID_SPEAKERS:
+                raise RuntimeError("扩写片段 speaker_id 必须是 A、B、C 或 D")
             normalized_new_segments.append(
                 {
                     "speaker_id": speaker_id,

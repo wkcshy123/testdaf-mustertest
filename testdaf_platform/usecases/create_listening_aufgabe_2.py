@@ -1,7 +1,9 @@
 """Use case for creating Listening Aufgabe 2 question packages."""
 
 from dataclasses import dataclass
+from typing import NamedTuple
 
+from testdaf_platform.config import VOICE_GENDER
 from testdaf_platform.services.listening_aufgabe_2 import (
     ListeningAufgabe2Generator,
     ListeningAufgabe2Input,
@@ -11,6 +13,11 @@ from testdaf_platform.services.reference_materials import ReferenceMaterialServi
 from testdaf_platform.services.tts_instructions import InstructionGenerator
 from testdaf_platform.storage.question_bank import QuestionBank, QuestionManifest
 from testdaf_platform.usecases._instruction_support import attach_instructions_to_segments
+
+
+class ListeningAufgabe2Result(NamedTuple):
+    manifest: QuestionManifest
+    generation: dict
 
 
 @dataclass(frozen=True)
@@ -25,6 +32,7 @@ class CreateListeningAufgabe2Request:
     host_voice: str
     guest_b_voice: str
     guest_c_voice: str
+    guest_d_voice: str = ""
 
 
 class CreateListeningAufgabe2UseCase:
@@ -45,8 +53,12 @@ class CreateListeningAufgabe2UseCase:
         self.question_bank = question_bank
         self.instruction_generator = instruction_generator or InstructionGenerator()
 
-    def execute(self, *, api_key: str, request: CreateListeningAufgabe2Request) -> QuestionManifest:
+    def execute(self, *, api_key: str, request: CreateListeningAufgabe2Request, progress_callback=None) -> ListeningAufgabe2Result:
         topic = request.topic.strip()
+        speaker_voice_map = _build_multi_voice_map(
+            request.host_voice, request.guest_b_voice, request.guest_c_voice, request.guest_d_voice
+        )
+        speaker_genders = {sid: VOICE_GENDER[v] for sid, v in speaker_voice_map.items()}
         reference_bundle = self.reference_material_service.build(
             request.reference_material,
             request.reference_urls,
@@ -59,7 +71,9 @@ class CreateListeningAufgabe2UseCase:
                 difficulty=request.difficulty,
                 information_flow=request.information_flow,
                 statement_balance=request.statement_balance,
+                speaker_genders=speaker_genders,
             ),
+            progress_callback=progress_callback,
         )
 
         instructions = self.instruction_generator.generate(
@@ -76,9 +90,6 @@ class CreateListeningAufgabe2UseCase:
 
         question_id = self.question_bank.new_question_id()
         question_dir = self.question_bank.get_question_dir("listening", "aufgabe_2", question_id)
-        speaker_voice_map = _build_three_voice_map(
-            request.host_voice, request.guest_b_voice, request.guest_c_voice
-        )
         audio_result = self.multi_speaker_tts_service.synthesize_dialogue(
             api_key=api_key,
             segments=generation["segments"],
@@ -87,33 +98,40 @@ class CreateListeningAufgabe2UseCase:
             instructions=instructions,
         )
 
-        return self.question_bank.save_listening_aufgabe_2(
-            question_id=question_id,
-            topic_input=topic,
-            reference_material=reference_bundle.combined_text,
-            difficulty=request.difficulty,
-            information_flow=request.information_flow,
-            statement_balance=request.statement_balance,
-            speech_speed=request.speech_speed,
-            speaker_voice_map=speaker_voice_map,
+        return ListeningAufgabe2Result(
+            manifest=self.question_bank.save_listening_aufgabe_2(
+                question_id=question_id,
+                topic_input=topic,
+                reference_material=reference_bundle.combined_text,
+                difficulty=request.difficulty,
+                information_flow=request.information_flow,
+                statement_balance=request.statement_balance,
+                speech_speed=request.speech_speed,
+                speaker_voice_map=speaker_voice_map,
+                generation=generation,
+                audio_filename=audio_result.path.name,
+                audio_size_kb=audio_result.size_kb,
+                segment_files=audio_result.segment_files,
+                reference_sources=reference_bundle.sources,
+            ),
             generation=generation,
-            audio_filename=audio_result.path.name,
-            audio_size_kb=audio_result.size_kb,
-            segment_files=audio_result.segment_files,
-            reference_sources=reference_bundle.sources,
         )
 
 
-def _build_three_voice_map(
-    host_voice: str, guest_b_voice: str, guest_c_voice: str
+def _build_multi_voice_map(
+    host_voice: str, guest_b_voice: str, guest_c_voice: str, guest_d_voice: str = ""
 ) -> dict[str, str]:
     selected = [host_voice, guest_b_voice, guest_c_voice]
+    keys = ["A", "B", "C"]
+    if guest_d_voice.strip():
+        selected.append(guest_d_voice.strip())
+        keys.append("D")
     fallbacks = ["Neil", "Maia", "Ethan", "Cherry", "Kai", "Serena"]
-    resolved = []
+    resolved: list[str] = []
     for voice in selected:
         if voice not in resolved:
             resolved.append(voice)
-            continue
-        replacement = next(item for item in fallbacks if item not in resolved)
-        resolved.append(replacement)
-    return {"A": resolved[0], "B": resolved[1], "C": resolved[2]}
+        else:
+            replacement = next(item for item in fallbacks if item not in resolved)
+            resolved.append(replacement)
+    return {keys[i]: resolved[i] for i in range(len(resolved))}

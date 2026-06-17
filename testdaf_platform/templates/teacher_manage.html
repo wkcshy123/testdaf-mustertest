@@ -44,6 +44,44 @@
         <strong class="q-title" id="title-{{ loop.index }}">{{ question.title }}</strong>
         <small>{{ question.topic }} · {{ question.task_type }} · {{ question.id[:16] }}</small>
         <small>{{ question.created_at }}</small>
+        {% if question.assets and question.assets.audio %}
+        <div class="mini-player" data-question-id="{{ question.id }}" tabindex="0" style="margin-top:6px">
+          <audio
+            src="/question-bank/{{ question._path }}/{{ question.assets.audio }}"
+            preload="none"
+            class="mini-audio"
+          ></audio>
+          <button type="button" class="btn-play" title="播放 / 暂停">▶</button>
+          <button type="button" class="btn-stop" title="停止">■</button>
+          <div class="mini-progress" title="点击定位">
+            <div class="mini-progress-fill"></div>
+          </div>
+          <span class="mini-time">0:00</span>
+          <div class="mini-volume" title="音量">
+            <input type="range" class="vol-slider" min="0" max="100" value="80">
+          </div>
+          <div class="mini-speed" title="语速 ← → 方向键调节">
+            <button type="button" class="btn-speed-down">◀</button>
+            <span class="speed-label">1.0x</span>
+            <button type="button" class="btn-speed-up">▶</button>
+          </div>
+          <label>
+            <select class="ambient-select small">
+              <option value="">无环境音</option>
+              <option value="murmur">☕ 低语 murmur</option>
+              <option value="cafe">☕ 咖啡馆</option>
+              <option value="trafic">🚗 街道交通</option>
+              <option value="hallway">🏫 走廊</option>
+              <option value="nature">🌿 自然</option>
+              <option value="office">💼 办公室</option>
+            </select>
+          </label>
+          <a class="btn-download" href="/api/audio-download/{{ question.id }}">📥</a>
+          <label class="ambient-download-label">
+            <input type="checkbox" class="ambient-download-check" /> +噪音
+          </label>
+        </div>
+        {% endif %}
       </div>
       <div class="table-actions">
         <a class="button small" href="/teacher/manage/download/docx?path={{ question._path }}">📄 Word</a>

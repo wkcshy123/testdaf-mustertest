@@ -29,3 +29,16 @@ VOICES = [
     ("Mia", "乖小妹 · 女声 · 温顺恬静"),
     ("Elias", "墨讲师 · 女声 · 娓娓道来"),
 ]
+
+VOICE_GENDER: dict[str, str] = {
+    "Cherry": "female",
+    "Serena": "female",
+    "Ethan": "male",
+    "Maia": "female",
+    "Moon": "male",
+    "Kai": "male",
+    "Neil": "male",
+    "Mochi": "male",
+    "Mia": "female",
+    "Elias": "female",
+}

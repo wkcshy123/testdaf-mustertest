@@ -1,10 +1,16 @@
 """Use case for creating Reading Aufgabe 1 question packages."""
 
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from testdaf_platform.services.reading import ReadingAufgabe1Generator, ReadingAufgabe1Input
 from testdaf_platform.services.reference_materials import ReferenceMaterialService
 from testdaf_platform.storage.question_bank import QuestionBank, QuestionManifest
+
+
+class ReadingAufgabe1Result(NamedTuple):
+    manifest: QuestionManifest
+    generation: dict
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,7 @@ class CreateReadingAufgabe1UseCase:
         self.generator = generator
         self.question_bank = question_bank
 
-    def execute(self, *, api_key: str, request: CreateReadingAufgabe1Request) -> QuestionManifest:
+    def execute(self, *, api_key: str, request: CreateReadingAufgabe1Request) -> ReadingAufgabe1Result:
         topic = request.topic.strip()
         offer_count = int(request.offer_count)
         no_match_count = int(request.no_match_count)
@@ -50,7 +56,8 @@ class CreateReadingAufgabe1UseCase:
             ),
         )
 
-        return self.question_bank.save_reading_aufgabe_1(
+        return ReadingAufgabe1Result(
+            manifest=self.question_bank.save_reading_aufgabe_1(
             question_id=self.question_bank.new_question_id(),
             topic_input=topic,
             reference_material=reference_bundle.combined_text,
@@ -59,4 +66,6 @@ class CreateReadingAufgabe1UseCase:
             no_match_count=no_match_count,
             generation=generation,
             reference_sources=reference_bundle.sources,
-        )
+        ),
+        generation=generation,
+    )

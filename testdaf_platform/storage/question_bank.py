@@ -608,6 +608,17 @@ class QuestionBank:
             manifests.append(data)
         return manifests
 
+    def get_question(self, question_id: str) -> dict:
+        self.ensure_layout()
+        for manifest_path in self.root.glob("**/manifest.json"):
+            if ".trash" in str(manifest_path):
+                continue
+            data = read_json(manifest_path)
+            if data.get("id") == question_id:
+                data["_path"] = str(manifest_path.parent.relative_to(self.root))
+                return data
+        raise KeyError(f"题目 {question_id} 不存在")
+
     @property
     def trash_dir(self) -> Path:
         return self.root / ".trash"

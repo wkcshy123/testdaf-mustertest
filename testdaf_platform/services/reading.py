@@ -32,6 +32,31 @@ AUFGABE_3_HARD_MAX_BYTES = 5400
 MAX_READING_LENGTH_REPAIR_ATTEMPTS = 3
 
 
+def _reorder_by_evidence(payload: dict, items_key: str, text_key: str, *, start_number: int) -> dict:
+    items = payload.get(items_key, [])
+    text = payload.get(text_key, "")
+    if not items or not text:
+        return payload
+
+    anchored: list[tuple[int, dict]] = []
+    unanchored: list[dict] = []
+    for item in items:
+        evidence = str(item.get("evidence", ""))
+        pos = text.find(evidence) if evidence else -1
+        if pos >= 0:
+            anchored.append((pos, item))
+        else:
+            unanchored.append(item)
+
+    anchored.sort(key=lambda entry: entry[0])
+    reordered = [item for _, item in anchored] + unanchored
+    for idx, item in enumerate(reordered):
+        item["number"] = start_number + idx
+
+    payload[items_key] = reordered
+    return payload
+
+
 @dataclass(frozen=True)
 class ReadingAufgabe1Input:
     topic: str
@@ -516,14 +541,16 @@ class ReadingAufgabe2Generator(BaseReadingGenerator):
         )
         self._validate(payload)
         self._annotate_text_length(payload)
-        return payload
+        return _reorder_by_evidence(payload, "questions", "reading_text", start_number=11)
 
     def _system_prompt(self) -> str:
         return (
             "你是 TestDaF Leseverstehen 出题专家，负责生成阅读第二题 Lesetext 2 的完整结构化物料。"
+            "\n"
             "Lesetext 2 是一篇中长说明文、科普文或社会现象分析文本，后接 10 道 A/B/C 三选一题，题号 11-20。"
             "该题考查细节定位、因果理解、比较、研究过程、限制条件、作者结论和整体理解。"
             "题目应基本跟随文本顺序，最后可设置整体结论题。干扰项应来自细节偷换、程度变化、因果误读或范围扩大。"
+            "每道题的 evidence 必须能在 reading_text 中找到对应的原文片段；questions 必须按 evidence 在 reading_text 中的出现顺序排列。"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外文字。"
             "顶层字段必须包含 title、topic、reading_text、paragraphs、questions。"
             "paragraphs 必须包含 5-8 个段落，每段应有相对完整的论述功能。"
@@ -621,14 +648,16 @@ class ReadingAufgabe3Generator(BaseReadingGenerator):
         )
         self._validate(payload)
         self._annotate_text_length(payload)
-        return payload
+        return _reorder_by_evidence(payload, "statements", "reading_text", start_number=21)
 
     def _system_prompt(self) -> str:
         return (
             "你是 TestDaF Leseverstehen 出题专家，负责生成阅读第三题 Lesetext 3 的完整结构化物料。"
+            "\n"
             "Lesetext 3 是较长的学术、文化、社会或科学主题文章，后接 10 道 Ja/Nein/Text sagt dazu nichts 判断题，题号 21-30。"
             "该题难度高于 Lesetext 2，核心是区分原文支持、原文明示相反、以及原文没有提供信息。"
             "Nein 必须与原文明确矛盾；Text sagt dazu nichts 必须是真的未提及，不能只是表达隐晦。"
+            "每道题的 evidence 必须能在 reading_text 中找到对应的原文片段；statements 必须按 evidence 在 reading_text 中的出现顺序排列。"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外文字。"
             "顶层字段必须包含 title、topic、reading_text、paragraphs、statements。"
             "paragraphs 必须包含 5-8 个段落，每段信息密度高但逻辑清楚。"

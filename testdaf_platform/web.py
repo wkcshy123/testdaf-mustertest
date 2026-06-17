@@ -2,11 +2,14 @@
 
 import os
 import shutil
+import struct
+import wave
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -169,6 +172,100 @@ def get_job(job_id: str) -> JSONResponse:
         return JSONResponse({"status": "not_found", "error": "任务不存在"}, status_code=404)
 
 
+@app.get("/api/audio-download/{question_id}")
+def download_audio_with_ambient(question_id: str, ambient: str = "") -> StreamingResponse:
+    question = question_bank.get_question(question_id)
+    audio_name = question.get("assets", {}).get("audio", "audio.wav")
+    rel_path = question.get("_path", "")
+    main_wav_path = QUESTION_BANK_DIR / rel_path / audio_name
+    title = question.get("title", "").strip() or "audio"
+    safe = []
+    for c in title:
+        if c.isascii() and c.isalnum() or c in " _-().":
+            safe.append(c)
+        elif c in "äöüÄÖÜß":
+            safe.append(c)
+        else:
+            safe.append("_")
+    safe_title = "".join(safe).strip().rstrip(".")[:80]
+
+    if ambient and ambient != "none":
+        ambient_path = PACKAGE_DIR / "static" / "ambient" / f"{ambient}.wav"
+        if ambient_path.exists():
+            mixed = _mix_ambient(str(main_wav_path), str(ambient_path), 0.15)
+            filename = f"{safe_title}_{ambient}.wav"
+            return StreamingResponse(
+                BytesIO(mixed),
+                media_type="audio/wav",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+    return _file_response_download(str(main_wav_path), f"{safe_title}.wav")
+
+
+def _mix_ambient(main_path: str, ambient_path: str, ambient_weight: float = 0.15) -> bytes:
+    """Mix ambient WAV into main audio; loop ambient to match main length."""
+    with wave.open(main_path, "rb") as main_wav:
+        main_params = main_wav.getparams()
+        main_nchannels = main_params.nchannels
+        main_sampwidth = main_params.sampwidth
+        main_framerate = main_params.framerate
+        main_frames = main_wav.readframes(main_params.nframes)
+
+    with wave.open(ambient_path, "rb") as amb_wav:
+        amb_params = amb_wav.getparams()
+        amb_frames = amb_wav.readframes(amb_params.nframes)
+
+    if amb_params.sampwidth != main_sampwidth or amb_params.framerate != main_framerate:
+        amb_frames = _resample_ambient(amb_params, main_sampwidth, main_framerate, amb_frames)
+
+    main_nframes = len(main_frames) // (main_nchannels * main_sampwidth)
+    amb_frame_len = len(amb_frames) // (main_nchannels * main_sampwidth)
+
+    main_weight = 1.0 - ambient_weight
+    output = BytesIO()
+
+    with wave.open(output, "wb") as out_wav:
+        out_wav.setnchannels(main_nchannels)
+        out_wav.setsampwidth(main_sampwidth)
+        out_wav.setframerate(main_framerate)
+        fmt = "<h" if main_sampwidth == 2 else "b"
+        for i in range(main_nframes):
+            main_sample = struct.unpack(fmt, main_frames[i * main_sampwidth:(i + 1) * main_sampwidth])[0]
+            amb_i = i % max(amb_frame_len, 1)
+            amb_sample = struct.unpack(fmt, amb_frames[amb_i * main_sampwidth:(amb_i + 1) * main_sampwidth])[0]
+            mixed = int(main_sample * main_weight + amb_sample * ambient_weight)
+            mixed = max(-32768, min(32767, mixed))
+            out_wav.writeframesraw(struct.pack(fmt, mixed))
+
+    return output.getvalue()
+
+
+def _resample_ambient(
+    amb_params, target_sampwidth: int, target_rate: int, amb_frames: bytes
+) -> bytes:
+    """Simple nearest-neighbor resample of ambient audio to match target."""
+    amb_rate = amb_params.framerate
+    ratio = target_rate / amb_rate
+    amb_nframes = len(amb_frames) // amb_params.sampwidth
+    out = BytesIO()
+    for i in range(int(amb_nframes * ratio)):
+        src = int(i / ratio)
+        sample = struct.unpack("<h", amb_frames[src * 2:(src + 1) * 2])[0]
+        out.write(struct.pack("<h", sample))
+    return out.getvalue()
+
+
+def _file_response_download(path: str, filename: str) -> StreamingResponse:
+    with open(path, "rb") as f:
+        data = f.read()
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="audio/wav",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     questions = question_bank.list_questions()
@@ -212,8 +309,11 @@ def create_listening_question(
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="生成对话文案 → 生成语音表现力指令 → 合成音频")
-            manifest = create_listening_aufgabe_1_usecase.execute(api_key=key, request=req)
-            return f"/teacher/listening/aufgabe-1?created={manifest.id}"
+            def progress(pct: int, msg: str) -> None:
+                job_manager.set_progress(job_id, pct, msg)
+            result = create_listening_aufgabe_1_usecase.execute(api_key=key, request=req, progress_callback=progress)
+            export_service.save_listening_with_answers(result.generation, "aufgabe_1")
+            return f"/teacher/listening/aufgabe-1?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/listening/aufgabe-1?job={job_id}", status_code=303)
@@ -234,6 +334,7 @@ def create_listening_aufgabe_2(
     host_voice: str = Form("Neil"),
     guest_b_voice: str = Form("Maia"),
     guest_c_voice: str = Form("Ethan"),
+    guest_d_voice: str = Form(""),
     api_key: str = Form(""),
 ) -> RedirectResponse:
     try:
@@ -249,14 +350,18 @@ def create_listening_aufgabe_2(
             host_voice=host_voice,
             guest_b_voice=guest_b_voice,
             guest_c_voice=guest_c_voice,
+            guest_d_voice=guest_d_voice,
         )
         job_id = job_manager.create("听力 Aufgabe 2")
 
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="生成访谈文案 → 生成语音表现力指令 → 合成音频")
-            manifest = create_listening_aufgabe_2_usecase.execute(api_key=key, request=req)
-            return f"/teacher/listening/aufgabe-2?created={manifest.id}"
+            def progress(pct: int, msg: str) -> None:
+                job_manager.set_progress(job_id, pct, msg)
+            result = create_listening_aufgabe_2_usecase.execute(api_key=key, request=req, progress_callback=progress)
+            export_service.save_listening_with_answers(result.generation, "aufgabe_2")
+            return f"/teacher/listening/aufgabe-2?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/listening/aufgabe-2?job={job_id}", status_code=303)
@@ -298,8 +403,11 @@ def create_listening_aufgabe_3(
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="生成访谈文案 → 生成语音表现力指令 → 合成音频")
-            manifest = create_listening_aufgabe_3_usecase.execute(api_key=key, request=req)
-            return f"/teacher/listening/aufgabe-3?created={manifest.id}"
+            def progress(pct: int, msg: str) -> None:
+                job_manager.set_progress(job_id, pct, msg)
+            result = create_listening_aufgabe_3_usecase.execute(api_key=key, request=req, progress_callback=progress)
+            export_service.save_listening_with_answers(result.generation, "aufgabe_3")
+            return f"/teacher/listening/aufgabe-3?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/listening/aufgabe-3?job={job_id}", status_code=303)
@@ -333,8 +441,9 @@ def create_reading_aufgabe_1(
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="调用文本模型生成匹配题")
-            manifest = create_reading_aufgabe_1_usecase.execute(api_key=key, request=req)
-            return f"/teacher/reading/aufgabe-1?created={manifest.id}"
+            result = create_reading_aufgabe_1_usecase.execute(api_key=key, request=req)
+            export_service.save_reading_with_answers(result.generation, "aufgabe_1")
+            return f"/teacher/reading/aufgabe-1?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/reading/aufgabe-1?job={job_id}", status_code=303)
@@ -368,8 +477,9 @@ def create_reading_aufgabe_2(
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="调用文本模型生成阅读理解题")
-            manifest = create_reading_aufgabe_2_usecase.execute(api_key=key, request=req)
-            return f"/teacher/reading/aufgabe-2?created={manifest.id}"
+            result = create_reading_aufgabe_2_usecase.execute(api_key=key, request=req)
+            export_service.save_reading_with_answers(result.generation, "aufgabe_2")
+            return f"/teacher/reading/aufgabe-2?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/reading/aufgabe-2?job={job_id}", status_code=303)
@@ -403,8 +513,9 @@ def create_reading_aufgabe_3(
         def run_job() -> str:
             key = _resolve_api_key(api_key)
             job_manager.update(job_id, step="调用文本模型生成判断题")
-            manifest = create_reading_aufgabe_3_usecase.execute(api_key=key, request=req)
-            return f"/teacher/reading/aufgabe-3?created={manifest.id}"
+            result = create_reading_aufgabe_3_usecase.execute(api_key=key, request=req)
+            export_service.save_reading_with_answers(result.generation, "aufgabe_3")
+            return f"/teacher/reading/aufgabe-3?created={result.manifest.id}"
 
         job_manager.start(job_id, run_job)
         return RedirectResponse(url=f"/teacher/reading/aufgabe-3?job={job_id}", status_code=303)
@@ -558,15 +669,6 @@ def student_entry(request: Request) -> HTMLResponse:
             "student_url": "http://127.0.0.1:8001/",
         },
     )
-
-
-def _build_voice_map(speaker_a_voice: str, speaker_b_voice: str) -> dict[str, str]:
-    if speaker_a_voice != speaker_b_voice:
-        return {"A": speaker_a_voice, "B": speaker_b_voice}
-
-    fallback = "Ethan" if speaker_a_voice != "Ethan" else "Cherry"
-    return {"A": speaker_a_voice, "B": fallback}
-
 
 def _resolve_api_key(api_key: str) -> str:
     key = api_key.strip() or os.getenv("DASHSCOPE_API_KEY", "") or config_store.load_api_key()

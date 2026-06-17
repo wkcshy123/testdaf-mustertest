@@ -97,10 +97,10 @@ def create_router(
         path = request.query_params.get("path", "")
         if not path:
             return RedirectResponse(url="/teacher", status_code=303)
-        if fmt not in ("docx", "pdf"):
+        if fmt not in ("docx",):
             return RedirectResponse(url="/teacher", status_code=303)
         try:
-            file_path = export_service.export(path, fmt=fmt)
+            file_path = export_service.export_questions_only(path)
             return FileResponse(
                 path=str(file_path),
                 filename=file_path.name,

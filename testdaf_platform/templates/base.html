@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TestDaF 模拟考试系统{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}?v=responsive-20260614">
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}?v=20260617a">
 </head>
 <body>
   <div class="shell">
@@ -26,23 +26,214 @@
     </main>
   </div>
   <script>
+    const SPEED_PRESETS = [0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2];
+    const DEFAULT_SPEED_IDX = 3;
+    const AMBIENT_NAMES = ["murmur", "cafe", "trafic", "hallway", "nature", "office"];
+
+    let ambCtx = null;
+    let ambGainNode = null;
+    let ambSource = null;
+    let ambBuffers = {};
+    let ambActive = false;
+
+    function ensureAmbCtx() {
+      if (!ambCtx) {
+        ambCtx = new AudioContext();
+        ambGainNode = ambCtx.createGain();
+        ambGainNode.gain.value = 0.25;
+        ambGainNode.connect(ambCtx.destination);
+      }
+    }
+
+    AMBIENT_NAMES.forEach(function(name) {
+      fetch("/static/ambient/" + name + ".wav")
+        .then(function(r) { return r.arrayBuffer(); })
+        .then(function(buf) { ensureAmbCtx(); return ambCtx.decodeAudioData(buf); })
+        .then(function(audioBuf) { ambBuffers[name] = audioBuf; })
+        .catch(function() {});
+    });
+
+    function startAmbient(name) {
+      stopAmbient();
+      ensureAmbCtx();
+      if (!ambBuffers[name]) return;
+      ambSource = ambCtx.createBufferSource();
+      ambSource.buffer = ambBuffers[name];
+      ambSource.loop = true;
+      ambSource.connect(ambGainNode);
+      ambSource.start(0);
+      ambActive = true;
+    }
+
+    function stopAmbient() {
+      if (ambSource) {
+        try { ambSource.stop(); } catch(e) {}
+        ambSource = null;
+        ambActive = false;
+      }
+    }
+
+    const ambSelects = document.querySelectorAll(".ambient-select");
+    const applyAmbient = (value) => {
+      if (!value) {
+        stopAmbient();
+        return;
+      }
+      startAmbient(value);
+    };
+    ambSelects.forEach(function(sel) {
+      sel.addEventListener("change", function() {
+        applyAmbient(this.value);
+        ambSelects.forEach(function(s) {
+          if (s !== sel) s.value = this.value;
+        }, this);
+      });
+    });
+
+    const formatTime = function(sec) {
+      var m = Math.floor(sec / 60);
+      var s = Math.floor(sec % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    };
+
+    document.querySelectorAll(".mini-player").forEach(function(player) {
+      var audio = player.querySelector(".mini-audio");
+      var btnPlay = player.querySelector(".btn-play");
+      var btnStop = player.querySelector(".btn-stop");
+      var progressBar = player.querySelector(".mini-progress");
+      var progressFill = player.querySelector(".mini-progress-fill");
+      var timeDisplay = player.querySelector(".mini-time");
+      var volSlider = player.querySelector(".vol-slider");
+      var btnDown = player.querySelector(".btn-speed-down");
+      var btnUp = player.querySelector(".btn-speed-up");
+      var speedLabel = player.querySelector(".speed-label");
+
+      var speedIdx = DEFAULT_SPEED_IDX;
+
+      audio.volume = 0.8;
+
+      var setSpeed = function(idx) {
+        speedIdx = Math.max(0, Math.min(SPEED_PRESETS.length - 1, idx));
+        audio.playbackRate = SPEED_PRESETS[speedIdx];
+        speedLabel.textContent = SPEED_PRESETS[speedIdx].toFixed(2) + "x";
+      };
+
+      btnPlay.addEventListener("click", function() {
+        if (audio.paused) {
+          audio.play();
+          btnPlay.textContent = "⏸";
+        } else {
+          audio.pause();
+          btnPlay.textContent = "▶";
+        }
+      });
+
+      audio.addEventListener("ended", function() {
+        btnPlay.textContent = "▶";
+      });
+
+      btnStop.addEventListener("click", function() {
+        audio.pause();
+        audio.currentTime = 0;
+        btnPlay.textContent = "▶";
+        progressFill.style.width = "0%";
+        timeDisplay.textContent = "0:00";
+      });
+
+      audio.addEventListener("timeupdate", function() {
+        if (audio.duration && isFinite(audio.duration)) {
+          var pct = (audio.currentTime / audio.duration) * 100;
+          progressFill.style.width = pct + "%";
+          timeDisplay.textContent = formatTime(audio.currentTime);
+        }
+      });
+
+      audio.addEventListener("loadedmetadata", function() {
+        timeDisplay.textContent = formatTime(audio.duration || 0);
+      });
+
+      progressBar.addEventListener("click", function(e) {
+        if (!audio.duration || !isFinite(audio.duration)) return;
+        var rect = progressBar.getBoundingClientRect();
+        var ratio = (e.clientX - rect.left) / rect.width;
+        audio.currentTime = Math.max(0, Math.min(audio.duration, ratio * audio.duration));
+      });
+
+      volSlider.addEventListener("input", function() {
+        audio.volume = this.value / 100;
+      });
+
+      btnDown.addEventListener("click", function() { setSpeed(speedIdx - 1); });
+      btnUp.addEventListener("click", function() { setSpeed(speedIdx + 1); });
+
+      player.addEventListener("keydown", function(e) {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          setSpeed(speedIdx - 1);
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          setSpeed(speedIdx + 1);
+        } else if (e.key === " ") {
+          e.preventDefault();
+          btnPlay.click();
+        }
+      });
+    });
+
+    document.querySelectorAll(".ambient-download-check").forEach(function(cb) {
+      cb.addEventListener("change", function() {
+        var toolbar = this.closest(".mini-player") || this.closest(".ambient-toolbar");
+        if (!toolbar) return;
+        var btn = toolbar.querySelector(".btn-download");
+        var sel = toolbar.querySelector(".ambient-select");
+        var qid = toolbar.dataset.questionId;
+        if (!btn || !sel || !qid) return;
+        if (this.checked && sel.value) {
+          btn.href = "/api/audio-download/" + qid + "?ambient=" + sel.value;
+        } else {
+          btn.href = "/api/audio-download/" + qid;
+        }
+      });
+    });
+
     const jobPanel = document.querySelector("[data-job-id]");
     if (jobPanel) {
       const jobId = jobPanel.dataset.jobId;
       const statusNode = document.getElementById("job-status");
       const stepNode = document.getElementById("job-step");
+      const progressBar = document.getElementById("job-progress");
+      const failedBeep = () => {
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "square";
+          osc.frequency.value = 440;
+          gain.gain.value = 0.15;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          osc.stop(ctx.currentTime + 0.5);
+        } catch (_) {}
+      };
       const poll = async () => {
         const response = await fetch(`/jobs/${jobId}`);
         const data = await response.json();
         statusNode.textContent = data.status || "unknown";
         stepNode.textContent = data.step || "";
+        if (progressBar && typeof data.progress === "number") {
+          progressBar.value = data.progress;
+        }
         if (data.status === "success" && data.result_url) {
+          if (progressBar) progressBar.value = 100;
           window.location.href = data.result_url;
           return;
         }
         if (data.status === "failed") {
           stepNode.textContent = data.error || "生成失败";
           jobPanel.classList.add("error");
+          failedBeep();
           return;
         }
         setTimeout(poll, 1500);

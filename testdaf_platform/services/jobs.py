@@ -13,6 +13,7 @@ class GenerationJob:
     name: str
     status: str = "queued"
     step: str = "等待开始"
+    progress: int = 0
     result_url: str | None = None
     error: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
@@ -45,11 +46,19 @@ class JobManager:
                 job.step = step
             job.updated_at = datetime.now().isoformat(timespec="seconds")
 
+    def set_progress(self, job_id: str, progress: int, step: str) -> None:
+        with self._lock:
+            job = self._jobs[job_id]
+            job.progress = max(0, min(100, progress))
+            job.step = step
+            job.updated_at = datetime.now().isoformat(timespec="seconds")
+
     def complete(self, job_id: str, result_url: str) -> None:
         with self._lock:
             job = self._jobs[job_id]
             job.status = "success"
             job.step = "生成完成"
+            job.progress = 100
             job.result_url = result_url
             job.updated_at = datetime.now().isoformat(timespec="seconds")
 
@@ -69,6 +78,7 @@ class JobManager:
                 "name": job.name,
                 "status": job.status,
                 "step": job.step,
+                "progress": job.progress,
                 "result_url": job.result_url,
                 "error": job.error,
                 "created_at": job.created_at,
