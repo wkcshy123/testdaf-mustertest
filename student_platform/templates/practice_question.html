@@ -466,6 +466,7 @@
               clearInterval(timer);
               showPrepStage("listening");
               audio.play().catch(function () {
+                  if (playBtn) { playBtn.disabled = false; playBtn.textContent = "▶ 播放第二遍"; }
                 if (audioHint) audioHint.textContent = "请点击播放按钮开始第二遍听力。";
               });
             }
@@ -525,7 +526,13 @@
       clearInterval(timer);
       document.getElementById("timer-display").textContent = "00:00";
       document.getElementById("timed-out-input").value = "true";
-      document.getElementById("answer-form").submit();
+        var form = document.getElementById("answer-form");
+        if (form.requestSubmit) {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event("submit", { cancelable: true }));
+          form.submit();
+        }
       return;
     }
     renderTimer();

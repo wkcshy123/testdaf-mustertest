@@ -14,6 +14,7 @@ import jinja2
 
 from scoring_platform.config import (
     SECTION_LABELS, DIMENSION_LABELS, DIMENSION_DESCRIPTIONS,
+    STUDENT_ATTEMPTS_DIR,
 )
 from scoring_platform.services.auth import get_user, resolve_student, list_all_students
 from scoring_platform.services.report_builder import (
@@ -293,26 +294,41 @@ def _find_speaking_attempt_audio_for_student(student_id: str) -> list[dict]:
 
 
 @app.get("/speaking-audio/{attempt_id}")
-def speaking_audio(attempt_id: str):
+def speaking_audio(request: Request, attempt_id: str):
     from fastapi.responses import FileResponse
     from shared.file_io.atomic_json import read_json
 
+    user = get_user(request)
+    if redirect := _redirect_if_not_logged_in(user):
+        return redirect
+    if not attempt_id.startswith("attempt_"):
+        return RedirectResponse(url="/", status_code=303)
+
     attempt_dir = STUDENT_ATTEMPTS_DIR / attempt_id
-    if not attempt_dir.exists():
+    if not attempt_dir.exists() or not attempt_dir.is_dir():
         return RedirectResponse(url="/", status_code=303)
-    meta = read_json(attempt_dir / "meta.json")
+    try:
+        meta = read_json(attempt_dir / "meta.json")
+    except Exception:
+        return RedirectResponse(url="/", status_code=303)
+    if not isinstance(meta, dict) or meta.get("section") != "speaking":
+        return RedirectResponse(url="/", status_code=303)
+    if not (_is_teacher(user) or meta.get("student_id") == user.get("student_id")):
+        return RedirectResponse(url="/student", status_code=303)
+
     audio_file = (meta or {}).get("audio_file", "")
-    if not audio_file:
+    audio_name = Path(str(audio_file)).name
+    if not audio_file or audio_name != audio_file:
         return RedirectResponse(url="/", status_code=303)
-    audio_path = attempt_dir / audio_file
-    if not audio_path.exists():
+    audio_path = attempt_dir / audio_name
+    if not audio_path.exists() or not audio_path.is_file():
         return RedirectResponse(url="/", status_code=303)
     ext = audio_path.suffix.lower()
-    mime_map = {"webm": "audio/webm", "ogg": "audio/ogg", "mp4": "audio/mp4", "wav": "audio/wav"}
+    mime_map = {".webm": "audio/webm", ".ogg": "audio/ogg", ".mp4": "audio/mp4", ".wav": "audio/wav"}
     return FileResponse(
         path=str(audio_path),
         media_type=mime_map.get(ext, "application/octet-stream"),
-        filename=audio_file,
+        filename=audio_name,
     )
 
 

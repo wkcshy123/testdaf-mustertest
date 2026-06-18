@@ -69,15 +69,14 @@ class ListeningAufgabe1Generator:
                     reorder_by_evidence(payload, "questions", "transcript", start_number=1), "ideal"
                 )
 
-            if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
-                if progress_callback:
-                    progress_callback(95, "答案排序与元数据写入中...")
-                return self._with_length_metadata(
-                    reorder_by_evidence(payload, "questions", "transcript", start_number=1),
-                    "accepted",
-                )
-
             if attempt >= MAX_LENGTH_REPAIR_ATTEMPTS:
+                if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
+                    if progress_callback:
+                        progress_callback(95, "答案排序与元数据写入中...")
+                    return self._with_length_metadata(
+                        reorder_by_evidence(payload, "questions", "transcript", start_number=1),
+                        "accepted_with_warning",
+                    )
                 raise TranscriptLengthError(current_bytes)
 
             if current_bytes == last_bytes:

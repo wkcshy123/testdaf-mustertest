@@ -33,6 +33,13 @@ def _make_segments(n: int = 3) -> list[dict]:
     ]
 
 
+def _make_segments_with_texts(texts: list[str]) -> list[dict]:
+    segments = _make_segments(len(texts))
+    for segment, text in zip(segments, texts):
+        segment["text"] = text
+    return segments
+
+
 class InstructionGeneratorTest(unittest.TestCase):
     def test_generate_returns_one_instruction_per_segment(self):
         payload = '{"instructions": ["语速中等，语气亲切，略带好奇，像学生提问。", "语速中等偏慢，语气专业稳重，清晰说明规则，句尾平稳。", "语速中等，语气轻松自然，情绪略开心。"]}'
@@ -107,6 +114,21 @@ class InstructionGeneratorTest(unittest.TestCase):
             segments=_make_segments(2),
         )
         self.assertEqual(len(instructions[0]), 120)
+
+    def test_generate_preserves_german_pronunciation_note_when_truncating(self):
+        long_one = "语" * 200
+        payload = f'{{"instructions": ["{long_one}"]}}'
+        gen = InstructionGenerator(client=_FakeClient(payload))
+        instructions = gen.generate(
+            api_key="fake-key",
+            title="t",
+            scenario="s",
+            speaker_roles={"A": "x"},
+            relationship="r",
+            segments=_make_segments_with_texts(["Ich studiere Germanistik und nutze mein Handy."]),
+        )
+        self.assertEqual(len(instructions[0]), 120)
+        self.assertIn("不要读成英语", instructions[0])
 
     def test_generate_empty_segments_returns_empty(self):
         gen = InstructionGenerator(client=_FakeClient(""))

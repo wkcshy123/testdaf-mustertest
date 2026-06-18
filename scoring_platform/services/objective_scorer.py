@@ -32,6 +32,7 @@ _FUNC_WORDS = frozenset({
     "in", "im", "am", "an", "auf", "bei", "vom", "für", "zu", "zum",
     "und", "oder", "aber", "mit", "von", "nach", "aus", "seit",
 })
+_NEGATION_WORDS = frozenset({"kein", "keine", "keinen", "keinem", "keiner", "nicht", "ohne"})
 
 
 def _normalize(text: str) -> str:
@@ -69,16 +70,37 @@ def _word_jaccard(a: str, b: str) -> float:
     return len(set_a & set_b) / len(set_a | set_b)
 
 
+def _tokens(text: str) -> set[str]:
+    return set(text.split())
+
+
+def _has_guard_token_mismatch(student_core: str, ref_core: str) -> bool:
+    student_tokens = _tokens(student_core)
+    ref_tokens = _tokens(ref_core)
+    if bool(student_tokens & _NEGATION_WORDS) != bool(ref_tokens & _NEGATION_WORDS):
+        return True
+    student_numbers = set(re.findall(r"\d+", student_core))
+    ref_numbers = set(re.findall(r"\d+", ref_core))
+    return bool(student_numbers and ref_numbers and student_numbers != ref_numbers)
+
+
 def _fuzzy_match(student_norm: str, student_core: str, refs: list[str]) -> tuple[bool, str]:
     for ref in refs:
         ref_norm = _normalize(ref)
         ref_core = _strip_func_words(ref_norm)
 
+        if _has_guard_token_mismatch(student_core, ref_core):
+            continue
+
         max_dist = min(3, max(len(student_norm), len(ref_norm)) * 0.20)
         if _levenshtein(student_norm, ref_norm) <= max_dist:
             return True, ref
 
-        if _word_jaccard(student_core, ref_core) >= 0.50:
+        shared_core = _tokens(student_core) & _tokens(ref_core)
+        if (
+            len(shared_core) >= 2
+            and _word_jaccard(student_core, ref_core) >= 0.75
+        ):
             return True, ref
 
     return False, ""

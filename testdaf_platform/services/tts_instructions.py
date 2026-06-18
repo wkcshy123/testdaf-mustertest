@@ -19,6 +19,17 @@ MAX_INSTRUCTION_CHARS = 120
 # 对所有 segments 一起做整体长度保护（粗安全网，防异常超长输出）。
 # 单条 ~120 中文字符，按最多 ~30 段对话估算。
 MAX_INSTRUCTION_BYTES = 16000
+_GERMAN_PRONUNCIATION_TERMS = (
+    "Germanistik",
+    "Anglistik",
+    "Romanistik",
+    "Slawistik",
+    "Skandinavistik",
+    "Handy",
+    "Event",
+    "Ticket",
+)
+_GERMAN_PRONUNCIATION_NOTE = "用德语发音朗读所有词汇，注意 Germanistik/Anglistik/Handy 等不要读成英语。"
 
 
 class InstructionGenerationError(RuntimeError):
@@ -67,7 +78,7 @@ class InstructionGenerator:
             max_tokens=2000,
         )
         parsed = parse_json(content)
-        instructions = self._extract_instructions(parsed, n)
+        instructions = self._extract_instructions(parsed, segments)
         self._validate_instructions(instructions, n)
         return instructions
 
@@ -158,7 +169,8 @@ class InstructionGenerator:
     # Parsing / validation
     # ------------------------------------------------------------------
 
-    def _extract_instructions(self, parsed: object, expected_len: int) -> list[str]:
+    def _extract_instructions(self, parsed: object, segments: list[dict]) -> list[str]:
+        expected_len = len(segments)
         if isinstance(parsed, dict):
             instructions = parsed.get("instructions")
         elif isinstance(parsed, list):
@@ -172,14 +184,36 @@ class InstructionGenerator:
         result: list[str] = []
         for item in instructions[:expected_len]:
             text = str(item).strip() if item is not None else ""
-            if len(text) > MAX_INSTRUCTION_CHARS:
-                text = text[:MAX_INSTRUCTION_CHARS]
+            segment = segments[len(result)] if len(result) < expected_len else {}
+            if self._needs_german_pronunciation_note(segment):
+                text = self._append_german_pronunciation_note(text)
+            else:
+                text = self._limit_instruction(text)
             result.append(text)
 
         # 若模型返回数量不足，补默认指令，避免阻塞 TTS。
         if len(result) < expected_len:
             result.extend([""] * (expected_len - len(result)))
         return result
+
+    def _needs_german_pronunciation_note(self, segment: dict) -> bool:
+        text = str(segment.get("text", ""))
+        return any(term in text for term in _GERMAN_PRONUNCIATION_TERMS)
+
+    def _limit_instruction(self, text: str) -> str:
+        if len(text) <= MAX_INSTRUCTION_CHARS:
+            return text
+        return text[:MAX_INSTRUCTION_CHARS].rstrip()
+
+    def _append_german_pronunciation_note(self, text: str) -> str:
+        if "不要读成英语" not in text:
+            text = f"{text.rstrip('。；; ')}；{_GERMAN_PRONUNCIATION_NOTE}" if text else _GERMAN_PRONUNCIATION_NOTE
+        if len(text) <= MAX_INSTRUCTION_CHARS:
+            return text
+        keep = MAX_INSTRUCTION_CHARS - len(_GERMAN_PRONUNCIATION_NOTE) - 1
+        if keep <= 0:
+            return _GERMAN_PRONUNCIATION_NOTE[:MAX_INSTRUCTION_CHARS]
+        return f"{text[:keep].rstrip()}；{_GERMAN_PRONUNCIATION_NOTE}"
 
     def _validate_instructions(self, instructions: list[str], expected_len: int) -> None:
         if len(instructions) != expected_len:
