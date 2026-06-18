@@ -11,6 +11,7 @@ from shared.question_bank import QuestionBankReader
 from student_platform.config import (
     ACCOUNT_SYSTEM_URL,
     QUESTION_BANK_DIR,
+    SCORING_SYSTEM_URL,
     SESSION_COOKIE,
     STUDENT_ATTEMPTS_DIR,
     STUDENTS_DIR,
@@ -61,6 +62,7 @@ def base_context(request: Request, **extra) -> dict:
         "request": request,
         "current_student": current_student(request),
         "account_system_url": ACCOUNT_SYSTEM_URL,
+        "scoring_system_url": SCORING_SYSTEM_URL,
     }
     ctx.update(extra)
     return ctx
@@ -180,6 +182,8 @@ async def submit_attempt(
     except json.JSONDecodeError:
         answers = {}
 
+    writing_mode = answers.pop("_writing_mode", "")
+
     params = question.get("parameters", {})
     answer_mode = params.get("answer_mode", "")
     time_limit = _time_limit_for(section, task_type)
@@ -204,6 +208,7 @@ async def submit_attempt(
         audio_filename=audio_filename,
         student_id=student["student_id"],
         student_name=student.get("name", ""),
+        writing_mode=writing_mode,
     )
     return RedirectResponse(url=f"/attempt/{attempt_id}", status_code=303)
 

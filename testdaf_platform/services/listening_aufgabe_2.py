@@ -11,11 +11,11 @@ from testdaf_platform.services.text_generation import TextGenerationClient
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
-MIN_TRANSCRIPT_BYTES = 4400
-MAX_TRANSCRIPT_BYTES = 4850
-TARGET_TRANSCRIPT_BYTES = 4623
-HARD_MIN_TRANSCRIPT_BYTES = 4200
-HARD_MAX_TRANSCRIPT_BYTES = 5050
+MIN_TRANSCRIPT_BYTES = 2800
+MAX_TRANSCRIPT_BYTES = 3450
+TARGET_TRANSCRIPT_BYTES = 3125
+HARD_MIN_TRANSCRIPT_BYTES = 2600
+HARD_MAX_TRANSCRIPT_BYTES = 3650
 MAX_LENGTH_REPAIR_ATTEMPTS = 3
 MAX_STRUCTURE_RETRY_ATTEMPTS = 2
 ALLOWED_SPEAKERS = {"A", "B", "C"}
@@ -119,14 +119,15 @@ class ListeningAufgabe2Generator:
                             reorder_by_evidence(payload, "statements", "transcript", start_number=9), "ideal"
                         )
 
+                    if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
+                        if progress_callback:
+                            progress_callback(95, "答案排序与元数据写入中...")
+                        return self._with_length_metadata(
+                            reorder_by_evidence(payload, "statements", "transcript", start_number=9),
+                            "accepted",
+                        )
+
                     if attempt >= MAX_LENGTH_REPAIR_ATTEMPTS:
-                        if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
-                            if progress_callback:
-                                progress_callback(95, "答案排序与元数据写入中...")
-                            return self._with_length_metadata(
-                                reorder_by_evidence(payload, "statements", "transcript", start_number=9),
-                                "accepted_with_warning",
-                            )
                         raise Aufgabe2TranscriptLengthError(current_bytes)
 
                     if current_bytes == last_bytes:
@@ -287,7 +288,7 @@ class ListeningAufgabe2Generator:
             "不要让所有角色说同一种话：主持人应负责引入、追问和总结，专家应给出解释、评价、例子和限制条件。"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外的任何文字。"
             "输出顶层字段必须包含 title、topic、speaker_roles、format_note、transcript、segments、statements。"
-            "transcript 必须是自然德语访谈，UTF-8 byte length 目标约 4623，允许范围 4400-4850。"
+            "transcript 必须是自然德语访谈，UTF-8 byte length 目标约 2800，允许范围 2800-3450。"
             "transcript 必须能由 segments 按顺序还原为说话人标注的完整访谈。"
             "每个 segment 只能包含一个说话人的连续发言，并包含 index、speaker_id、speaker_role、text、pause_after_ms、pause_reason。"
             "pause_after_ms 只能从 200、350、500、750、1000 中选择。"
@@ -332,8 +333,8 @@ class ListeningAufgabe2Generator:
             f"题目顺序规则：{flow_instruction}\n"
             f"答案分布规则：{balance_instruction}\n\n"
             "篇幅要求：\n"
-            "- transcript 的 UTF-8 byte length 目标约 4623。\n"
-            "- 允许范围为 4400-4850。\n"
+            "- transcript 的 UTF-8 byte length 目标约 2800。\n"
+            "- 允许范围为 2800-3450。\n"
             "- 如果内容不足，请自然增加背景解释、专家观点、例子、限制条件、反驳或主持人的追问。\n"
             "- 不要为了凑长度重复无意义内容。\n\n"
             "访谈结构要求：\n"

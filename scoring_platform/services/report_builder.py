@@ -8,7 +8,7 @@ from scoring_platform.config import (
     DIMENSION_LABELS, DIMENSION_DESCRIPTIONS,
 )
 from scoring_platform.services.objective_scorer import score_objective
-from scoring_platform.services.writing_scorer import score_writing
+from scoring_platform.services.writing_scorer import score_writing, _extract_student_text
 from scoring_platform.services.speaking_store import get_speaking
 from shared.file_io.atomic_json import read_json, write_json_atomic
 
@@ -69,12 +69,15 @@ def score_attempt(attempt_id: str) -> dict | None:
             }
     elif section == "writing":
         writing = score_writing(meta, answers)
+        student_text = _extract_student_text(meta, answers)
         if writing:
+            writing["student_text"] = student_text
             result_base["writing"] = writing
         else:
             result_base["writing"] = {
                 "tdn": 0, "tdn_label": "—",
                 "dimensionen": {}, "kommentar": "",
+                "student_text": student_text,
             }
 
     write_json_atomic(result_file, result_base)

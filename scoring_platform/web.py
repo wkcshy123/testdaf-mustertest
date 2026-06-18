@@ -252,6 +252,70 @@ def teacher_home(request: Request):
     return _render("teacher_home.html", request, students=all_students, student_rows=student_rows, sort=sort)
 
 
+def _find_speaking_attempt_audio_for_student(student_id: str) -> list[dict]:
+    from scoring_platform.config import STUDENT_ATTEMPTS_DIR
+    from shared.file_io.atomic_json import read_json
+
+    attempts: list[dict] = []
+    if not STUDENT_ATTEMPTS_DIR.exists():
+        return attempts
+
+    for attempt_dir in sorted(STUDENT_ATTEMPTS_DIR.glob("attempt_*")):
+        meta_path = attempt_dir / "meta.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = read_json(meta_path)
+        except Exception:
+            continue
+        if meta.get("section") != "speaking" or meta.get("student_id") != student_id:
+            continue
+        audio_file = meta.get("audio_file", "")
+        if not audio_file or not (attempt_dir / audio_file).exists():
+            continue
+        attempts.append({
+            "attempt_id": attempt_dir.name,
+            "task_type": meta.get("task_type", ""),
+            "audio_file": audio_file,
+            "title": meta.get("title", ""),
+            "submitted_at": meta.get("submitted_at", ""),
+        })
+
+    def _task_order(a: dict) -> int:
+        tt = a.get("task_type", "")
+        try:
+            return int(tt.replace("aufgabe_", ""))
+        except (ValueError, AttributeError):
+            return 99
+
+    attempts.sort(key=_task_order)
+    return attempts
+
+
+@app.get("/speaking-audio/{attempt_id}")
+def speaking_audio(attempt_id: str):
+    from fastapi.responses import FileResponse
+    from shared.file_io.atomic_json import read_json
+
+    attempt_dir = STUDENT_ATTEMPTS_DIR / attempt_id
+    if not attempt_dir.exists():
+        return RedirectResponse(url="/", status_code=303)
+    meta = read_json(attempt_dir / "meta.json")
+    audio_file = (meta or {}).get("audio_file", "")
+    if not audio_file:
+        return RedirectResponse(url="/", status_code=303)
+    audio_path = attempt_dir / audio_file
+    if not audio_path.exists():
+        return RedirectResponse(url="/", status_code=303)
+    ext = audio_path.suffix.lower()
+    mime_map = {"webm": "audio/webm", "ogg": "audio/ogg", "mp4": "audio/mp4", "wav": "audio/wav"}
+    return FileResponse(
+        path=str(audio_path),
+        media_type=mime_map.get(ext, "application/octet-stream"),
+        filename=audio_file,
+    )
+
+
 @app.get("/teacher/student/{student_id}", response_class=HTMLResponse)
 def teacher_student_view(request: Request, student_id: str):
     user = get_user(request)
@@ -284,7 +348,9 @@ def teacher_student_view(request: Request, student_id: str):
                 latest_exam = exam
                 break
 
-    return _render("student_home.html", request, latest_exam=latest_exam, latest_practice=latest_practice, override_name=student_name, override_name_id=student_id, speaking=speaking_for_render(student_id), is_teacher_view=True, sort=request.query_params.get("sort", "name"))
+    speaking_audio_attempts = _find_speaking_attempt_audio_for_student(student_id)
+
+    return _render("student_home.html", request, latest_exam=latest_exam, latest_practice=latest_practice, override_name=student_name, override_name_id=student_id, speaking=speaking_for_render(student_id), speaking_audio_attempts=speaking_audio_attempts, is_teacher_view=True, sort=request.query_params.get("sort", "name"))
 
 
 @app.post("/teacher/student/{student_id}/speaking")

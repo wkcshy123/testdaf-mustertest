@@ -10,24 +10,59 @@
 </section>
 
 {% if view.answer_mode != "spoken_response" %}
+{% if view.audio_file %}
+<section class="panel listening-prep" id="listening-prep">
+  <div class="prep-stage" id="prep-stage-initial">
+    <h2>📖 读题准备</h2>
+    <p class="muted">请仔细阅读下方的题目内容，了解你需要提取哪些信息。</p>
+    <p class="muted">读题时间：<strong>{{ view.prep_time_seconds }} 秒</strong>（模拟官方 TestDaF 设定）</p>
+    <div class="prep-grace">
+      <label>
+        <input type="checkbox" id="prep-extra" checked>
+        <span>额外 +{{ view.extra_prep_grace }} 秒（模拟考试指令播报时间）</span>
+      </label>
+    </div>
+    <div class="prep-start">
+      <button type="button" class="button primary" id="prep-start-btn">▶ 开始读题倒计时</button>
+    </div>
+  </div>
+  <div class="prep-stage" id="prep-stage-countdown" style="display:none;">
+    <div class="prep-countdown-big">
+      <span class="prep-label">读题剩余</span>
+      <span class="prep-timer-display" id="prep-countdown-display">--:--</span>
+    </div>
+    <p class="muted">倒计时结束后将自动播放听力音频。</p>
+  </div>
+  <div class="prep-stage" id="prep-stage-listening" style="display:none;">
+    <div class="audio-area" id="audio-area">
+      <p class="muted">听力播放（共 {{ view.play_count }} 次）</p>
+      <audio id="practice-audio" preload="auto"
+             src="/question-bank/{{ view.path }}/{{ view.audio_file }}"></audio>
+      <div class="audio-controls">
+        <button type="button" class="button primary" id="play-btn">▶ 播放音频</button>
+        <span class="play-count">已播放 <span id="play-count">0</span> / {{ view.play_count }}</span>
+      </div>
+      <p class="muted" id="audio-hint">请在音频播放期间作答。听力结束后点击提交。</p>
+    </div>
+  </div>
+  {% if view.play_interval_seconds and view.play_interval_seconds > 0 %}
+  <div class="prep-stage" id="prep-stage-interval" style="display:none;">
+    <div class="prep-countdown-big">
+      <span class="prep-label">利用间隔时间检查并完善你的答案</span>
+      <span class="prep-timer-display" id="interval-display">--:--</span>
+    </div>
+    <p class="muted">倒计时结束后将自动播放第二遍。</p>
+  </div>
+  {% endif %}
+</section>
+{% else %}
 <section class="panel timer-bar" id="timer-bar">
   <div class="timer-info">
     <span class="timer-label">剩余时间</span>
     <span class="timer-display" id="timer-display">--:--</span>
   </div>
-  {% if view.audio_file %}
-  <div class="audio-area" id="audio-area">
-    <p class="muted">听力播放（共 {{ view.play_count }} 次）</p>
-    <audio id="practice-audio" preload="auto"
-           src="/question-bank/{{ view.path }}/{{ view.audio_file }}"></audio>
-    <div class="audio-controls">
-      <button type="button" class="button primary" id="play-btn">▶ 播放音频</button>
-      <span class="play-count">已播放 <span id="play-count">0</span> / {{ view.play_count }}</span>
-    </div>
-    <p class="muted" id="audio-hint">可随时作答，音频可播放 {{ view.play_count }} 次。</p>
-  </div>
-  {% endif %}
 </section>
+{% endif %}
 {% endif %}
 
 <form id="answer-form" method="post"
@@ -190,6 +225,23 @@
     {% endif %}
   </section>
 
+  <section class="panel writing-mode-picker">
+    <h2>评分模式</h2>
+    <p class="muted">选择评分风格——练习模式更宽松鼓励，考试模式严格模拟真实 TestDaF 评分。</p>
+    <div class="mode-options">
+      <label class="mode-option">
+        <input type="radio" name="writing_mode" value="practice" checked>
+        <span class="mode-label">📝 练习模式</span>
+        <span class="mode-desc">宽松评分，鼓励为主，评语温和</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="writing_mode" value="exam">
+        <span class="mode-label">🎯 考试模式</span>
+        <span class="mode-desc">严格评分，模拟真实考试，评语客观</span>
+      </label>
+    </div>
+  </section>
+
   <section class="panel answer-area">
     <h2>你的作文</h2>
     <p class="muted">在下方输入你的德语作文。</p>
@@ -286,12 +338,161 @@
 {% if view.answer_mode != "spoken_response" %}
 <script>
 (function () {
+  var IS_LISTENING = {% if view.audio_file %}true{% else %}false{% endif %};
   var PLAYS_KEY = "practice_plays_{{ view.question_id }}";
-  var timer = null;
-  var elapsed = 0;
-
-  // --- Timer (all question types) ---
   var QUESTION_KEY = "practice_elapsed_{{ view.question_id }}";
+  var elapsed = 0;
+  var timer = null;
+
+  {% if view.audio_file %}
+  var maxPlays = {{ view.play_count }};
+  var playCount = 0;
+  var PREP_TIME = {{ view.prep_time_seconds }};
+  var EXTRA_GRACE = {{ view.extra_prep_grace }};
+
+  try {
+    playCount = parseInt(sessionStorage.getItem(PLAYS_KEY) || "0", 10);
+  } catch (e) {}
+  {% endif %}
+
+  // --- Collect answers on submit ---
+  document.getElementById("answer-form").addEventListener("submit", function (e) {
+    if (timer) clearInterval(timer);
+    try {
+      sessionStorage.removeItem(QUESTION_KEY);
+      sessionStorage.removeItem(PLAYS_KEY);
+    } catch (e) {}
+    document.getElementById("elapsed-input").value = elapsed;
+    var answers = {};
+    this.querySelectorAll("[data-q-number]").forEach(function (el) {
+      var num = el.getAttribute("data-q-number");
+      if (el.type === "radio") {
+      } else {
+        answers[num] = el.value;
+      }
+    });
+    this.querySelectorAll("input[type=radio]:checked").forEach(function (el) {
+      if (el.name === "writing_mode") {
+        answers["_writing_mode"] = el.value;
+      } else {
+        var num = el.name.replace("q_", "");
+        answers[num] = el.value;
+      }
+    });
+    document.getElementById("answers-input").value = JSON.stringify(answers);
+  });
+
+  {% if view.audio_file %}
+  // =========================================================
+  // Listening: three-stage prep → countdown → auto-play
+  // =========================================================
+
+  function fmt(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  function showPrepStage(name) {
+     ["initial", "countdown", "listening"{% if view.play_interval_seconds and view.play_interval_seconds > 0 %}, "interval"{% endif %}].forEach(function (s) {
+       var el = document.getElementById("prep-stage-" + s);
+       if (el) el.style.display = (s === name ? "block" : "none");
+     });
+   }
+
+  document.getElementById("prep-start-btn").addEventListener("click", function () {
+    var total = PREP_TIME;
+    var extraCb = document.getElementById("prep-extra");
+    if (extraCb && extraCb.checked) total += EXTRA_GRACE;
+
+    showPrepStage("countdown");
+    var remaining = total;
+    var display = document.getElementById("prep-countdown-display");
+    if (display) display.textContent = fmt(remaining);
+
+    timer = setInterval(function () {
+      remaining--;
+      if (display) display.textContent = fmt(Math.max(0, remaining));
+      if (remaining <= 0) {
+        clearInterval(timer);
+        startListening();
+      }
+    }, 1000);
+  });
+
+  function startListening() {
+    showPrepStage("listening");
+    elapsed = 0;
+
+    var audio = document.getElementById("practice-audio");
+    var playBtn = document.getElementById("play-btn");
+    var playCountSpan = document.getElementById("play-count");
+    var audioHint = document.getElementById("audio-hint");
+
+    if (playCountSpan) playCountSpan.textContent = playCount;
+
+    if (playCount >= maxPlays) {
+      if (playBtn) { playBtn.disabled = true; playBtn.textContent = "播放已结束"; }
+    }
+
+    if (playBtn) {
+      playBtn.addEventListener("click", function () {
+        if (playCount >= maxPlays) return;
+        audio.play();
+      });
+    }
+
+    if (audio) {
+      audio.addEventListener("play", function () {
+        playCount++;
+        if (playCountSpan) playCountSpan.textContent = playCount;
+        try { sessionStorage.setItem(PLAYS_KEY, String(playCount)); } catch (e) {}
+        if (playBtn) { playBtn.disabled = true; playBtn.textContent = "▶ 播放中…"; }
+      });
+
+      audio.addEventListener("ended", function () {
+        if (playCount >= maxPlays) {
+          if (playBtn) { playBtn.textContent = "播放已结束"; }
+        {% if view.play_interval_seconds and view.play_interval_seconds > 0 %}
+        } else if (playCount > 0 && {{ view.play_interval_seconds }} > 0) {
+          showPrepStage("interval");
+          var intervalRemaining = {{ view.play_interval_seconds }};
+          var intervalDisplay = document.getElementById("interval-display");
+          if (intervalDisplay) intervalDisplay.textContent = fmt(intervalRemaining);
+          timer = setInterval(function () {
+            intervalRemaining--;
+            if (intervalDisplay) intervalDisplay.textContent = fmt(Math.max(0, intervalRemaining));
+            if (intervalRemaining <= 0) {
+              clearInterval(timer);
+              showPrepStage("listening");
+              audio.play().catch(function () {
+                if (audioHint) audioHint.textContent = "请点击播放按钮开始第二遍听力。";
+              });
+            }
+          }, 1000);
+        {% else %}
+        } else {
+          if (playBtn) { playBtn.disabled = false; playBtn.textContent = "▶ 再次播放"; }
+          if (audioHint) audioHint.textContent = "可再次播放（剩余 " + (maxPlays - playCount) + " 次）。";
+        {% endif %}
+        }
+      });
+
+      audio.play().catch(function () {
+        if (audioHint) audioHint.textContent = "请点击播放按钮开始听力。";
+      });
+    }
+
+    var tracker = setInterval(function () {
+      elapsed++;
+    }, 1000);
+  }
+
+  {% else %}
+  // =========================================================
+  // Reading / Writing: global timer with auto-submit
+  // =========================================================
+
   var timeLimit = {{ view.time_limit_seconds }};
 
   try {
@@ -329,76 +530,7 @@
     }
     renderTimer();
   }, 1000);
-
-  // --- Listening audio playback control (play count limit only) ---
-  {% if view.audio_file %}
-  var maxPlays = {{ view.play_count }};
-  var audio = document.getElementById("practice-audio");
-  var playBtn = document.getElementById("play-btn");
-  var playCountSpan = document.getElementById("play-count");
-  var audioHint = document.getElementById("audio-hint");
-
-  // Restore play count across refreshes
-  var playCount = 0;
-  try {
-    playCount = parseInt(sessionStorage.getItem(PLAYS_KEY) || "0", 10);
-  } catch (e) {}
-  playCountSpan.textContent = playCount;
-
-  if (playCount >= maxPlays) {
-    playBtn.disabled = true;
-    playBtn.textContent = "播放已结束";
-  }
-
-  playBtn.addEventListener("click", function () {
-    if (playCount >= maxPlays) return;
-    audio.play();
-  });
-
-  audio.addEventListener("play", function () {
-    playCount++;
-    playCountSpan.textContent = playCount;
-    try { sessionStorage.setItem(PLAYS_KEY, String(playCount)); } catch (e) {}
-    playBtn.disabled = true;
-    playBtn.textContent = "▶ 播放中…";
-  });
-
-  audio.addEventListener("ended", function () {
-    if (playCount >= maxPlays) {
-      playBtn.textContent = "播放已结束";
-    } else {
-      playBtn.disabled = false;
-      playBtn.textContent = "▶ 再次播放";
-      audioHint.textContent = "可再次播放（剩余 " + (maxPlays - playCount) + " 次）。";
-    }
-  });
   {% endif %}
-
-  // --- Collect answers on submit ---
-  document.getElementById("answer-form").addEventListener("submit", function (e) {
-    if (timer) clearInterval(timer);
-    // Clean up sessionStorage so a fresh attempt starts from zero
-    try {
-      sessionStorage.removeItem("practice_elapsed_{{ view.question_id }}");
-      sessionStorage.removeItem(PLAYS_KEY);
-    } catch (e) {}
-    document.getElementById("elapsed-input").value = elapsed;
-    var answers = {};
-    this.querySelectorAll("[data-q-number]").forEach(function (el) {
-      var num = el.getAttribute("data-q-number");
-      if (el.type === "radio") {
-        // handled by name below
-      } else {
-        answers[num] = el.value;
-      }
-    });
-    // collect radio groups
-    this.querySelectorAll("input[type=radio]:checked").forEach(function (el) {
-      var num = el.name.replace("q_", "");
-      answers[num] = el.value;
-    });
-    document.getElementById("answers-input").value = JSON.stringify(answers);
-  });
 })();
 </script>
 {% endif %}

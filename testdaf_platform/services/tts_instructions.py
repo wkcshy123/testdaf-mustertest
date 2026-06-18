@@ -98,7 +98,14 @@ class InstructionGenerator:
             "例如'带着叹息说'、'略带惊讶'、'语气迟疑'。"
             "不要提示跳过这些词。\n"
             "- 不要改写德语文本内容，只描述如何朗读。\n"
-            "- speech_speed 会给出整体语速倾向，请据此调整每条指令中的语速描述。"
+            "- speech_speed 会给出整体语速倾向，请据此调整每条指令中的语速描述。\n"
+            "- 全文必须用德语语音朗读。如果该段文本包含容易被误读为英语的德语词"
+            "（如 Germanistik、Anglistik、Romanistik、Slawistik、Skandinavistik 等学科名称、"
+            "Handy（手机）、Event（活动）、Ticket 等），"
+            "请在指令末尾注明'用德语发音朗读所有词汇，"
+            "尤其注意 Germanistik/Anglistik/Handy 等词不要读成英语'。\n"
+            "- 德语日常英语借词 Job、Team、Computer、Laptop、Meeting、Smartphone、Workshop 维持英语发音，"
+            "不需要特别标注。"
         )
 
     def _user_prompt(

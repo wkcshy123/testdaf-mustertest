@@ -35,6 +35,19 @@
     <h2>{{ icon }} {{ task.label }}</h2>
     <span>{{ task.correct }} / {{ task.total }} ✅</span>
   </div>
+  {% if task.fuzzy_matches %}
+  <div class="fuzzy-section">
+    {% for fm in task.fuzzy_matches %}
+    <article class="table-row fuzzy-row">
+      <div>
+        <strong>Nr. {{ fm.number }}</strong> ✅ 已接受（模糊匹配）
+        学生：<code>{{ fm.student }}</code>
+        <span class="muted">→ 参考写法：<code>{{ fm.reference }}</code></span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% if task.errors %}
   <div class="table">
     {% for err in task.errors %}
@@ -46,7 +59,8 @@
     </article>
     {% endfor %}
   </div>
-  {% else %}
+  {% endif %}
+  {% if not task.errors and not task.fuzzy_matches %}
   <p class="empty">全部正确！</p>
   {% endif %}
 </section>
@@ -58,8 +72,22 @@
 <section class="panel">
   <div class="tdn-hero">
     <div class="tdn-badge tdn-{{ wri.tdn }}">{{ wri.tdn_label }}</div>
+    {% if wri.writing_mode %}
+    <div class="writing-mode-badge mode-{{ wri.writing_mode }}">
+      {% if wri.writing_mode == "exam" %}🎯 考试模式评分{% else %}📝 练习模式评分{% endif %}
+    </div>
+    {% endif %}
   </div>
 </section>
+
+{% if wri.student_text %}
+<section class="panel">
+  <div class="panel-title"><h2>📄 学生作文</h2></div>
+  <div class="essay-show">
+    <pre>{{ wri.student_text }}</pre>
+  </div>
+</section>
+{% endif %}
 
 <section class="panel">
   <div class="panel-title"><h2>评分维度</h2></div>
@@ -83,7 +111,7 @@
 
 {% if wri.kommentar %}
 <section class="panel">
-  <div class="panel-title"><h2>📝 评语 / Bewertungskommentar</h2></div>
+  <div class="panel-title"><h2>📝 评语</h2></div>
   <p>{{ wri.kommentar }}</p>
 </section>
 {% endif %}

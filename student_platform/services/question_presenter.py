@@ -11,9 +11,18 @@ from shared.question_bank import QuestionBankReader
 DEFAULT_TIME_LIMITS = {
     "listening": 300,   # 5 min (not used — listening has no timer)
     "reading": 600,     # 10 min
-    "writing": 1200,    # 20 min (future)
+    "writing": 3600,    # 60 min
     "speaking": 600,    # 10 min (future)
 }
+
+# Official TestDaF paper-based listening read-prep time (seconds) per task.
+# Source: TestDaF Modellsatz 02 Hörverstehen
+LISTENING_PREP_TIME = {
+    "aufgabe_1": 30,
+    "aufgabe_2": 60,
+    "aufgabe_3": 90,
+}
+EXTRA_PREP_GRACE = 15
 
 # Per-task-type overrides, configurable via environment variables.
 # e.g. STUDENT_TIME_LIMIT_READING_AUFGABE_1=600
@@ -71,7 +80,7 @@ class QuestionPresenter:
         }
 
         # ------------------------------------------------------------------
-        # Listening: audio playback control (play count + answer-anytime)
+        # Listening: three-stage UI (read-prep → countdown → auto-play audio)
         # Only set for listening questions — speaking has its own intro
         # audio handled by the multi-stage state machine.
         # ------------------------------------------------------------------
@@ -79,8 +88,13 @@ class QuestionPresenter:
             assets = question_meta.get("assets", {})
             if assets.get("audio"):
                 view["audio_file"] = assets["audio"]
-                params = question_meta.get("parameters", {})
-                view["play_count"] = params.get("play_count", 1)
+            params = question_meta.get("parameters", {})
+            view["play_count"] = params.get("play_count", 1)
+            view["prep_time_seconds"] = LISTENING_PREP_TIME.get(task_type, 60)
+            view["extra_prep_grace"] = EXTRA_PREP_GRACE
+            view["task_type"] = task_type
+            if view["play_count"] >= 2:
+                view["play_interval_seconds"] = 60
 
         if answer_mode == "short_text":
             view["items"] = self._present_short_text(bundle)

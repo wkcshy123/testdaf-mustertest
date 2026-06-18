@@ -31,6 +31,7 @@ class AttemptStore:
         exam_id: str | None = None,
         student_id: str | None = None,
         student_name: str | None = None,
+        writing_mode: str = "",
     ) -> str:
         """Write an attempt directory and return its id."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -57,6 +58,8 @@ class AttemptStore:
             meta["student_id"] = student_id
         if student_name:
             meta["student_name"] = student_name
+        if writing_mode:
+            meta["writing_mode"] = writing_mode
 
         if audio_bytes:
             (attempt_dir / audio_filename).write_bytes(audio_bytes)

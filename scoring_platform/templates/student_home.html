@@ -80,6 +80,24 @@
 {% if is_teacher_view and speaking %}
 <section class="panel speaking-form">
   <div class="panel-title"><h2>🎤 口语 Sprechen</h2>{% if speaking.updated_at %}<span class="saved-hint">✓ 已保存 · {{ speaking.updated_at }}</span>{% endif %}</div>
+
+  {% if speaking_audio_attempts %}
+  <div class="speaking-audio-list">
+    {% for attempt in speaking_audio_attempts %}
+    <div class="speaking-audio-item">
+      <div class="speaking-audio-header">
+        <strong>{% if attempt.task_type %}Aufgabe {{ attempt.task_type.replace('aufgabe_', '') }}{% else %}{{ attempt.attempt_id[-8:] }}{% endif %}</strong>
+        <span>{{ attempt.title }} · {{ attempt.submitted_at }}</span>
+      </div>
+      <audio controls preload="none" src="/speaking-audio/{{ attempt.attempt_id }}"></audio>
+      <small><a href="/speaking-audio/{{ attempt.attempt_id }}" download>下载录音</a></small>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">该学生尚未提交口语录音。</p>
+  {% endif %}
+
   <form method="post" action="/teacher/student/{{ override_name_id or '' }}/speaking?sort={{ sort or 'name' }}">
     <div class="speaking-overall">
       <label>

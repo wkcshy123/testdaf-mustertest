@@ -14,3 +14,6 @@ SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 
 # Account system entry point (for login/register navigation).
 ACCOUNT_SYSTEM_URL = "http://127.0.0.1:8002/"
+
+# Scoring system entry point (for score detail navigation).
+SCORING_SYSTEM_URL = "http://127.0.0.1:8003/"

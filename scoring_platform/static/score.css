@@ -157,7 +157,49 @@ body {
   color: var(--accent);
 }
 
+.speaking-audio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.speaking-audio-item {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.speaking-audio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.speaking-audio-header strong {
+  font-size: 0.9rem;
+}
+
+.speaking-audio-header span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.speaking-audio-item audio {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.speaking-audio-item small a {
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
 .error-row { background: #fef5f5; }
+
+.fuzzy-row { background: #fefdf5; }
 
 .tdn-badge {
   display: inline-block;
@@ -216,3 +258,30 @@ body {
 .empty { color: var(--muted); padding: 16px; text-align: center; }
 .muted { color: var(--muted); }
 code { background: var(--bg); padding: 1px 6px; border-radius: 4px; font-size: 0.85em; }
+
+.writing-mode-badge {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+.writing-mode-badge.mode-practice {
+  background: #e8f0ee; color: var(--accent);
+}
+.writing-mode-badge.mode-exam {
+  background: #fef5f5; color: #c0392b;
+}
+
+.essay-show pre {
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+  background: var(--bg);
+  padding: 16px;
+  border-radius: var(--radius);
+  max-height: 400px;
+  overflow-y: auto;
+}

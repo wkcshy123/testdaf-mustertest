@@ -11,11 +11,11 @@ from testdaf_platform.services.text_generation import TextGenerationClient
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
-MIN_TRANSCRIPT_BYTES = 4050
-MAX_TRANSCRIPT_BYTES = 4450
-TARGET_TRANSCRIPT_BYTES = 4243
-HARD_MIN_TRANSCRIPT_BYTES = 3850
-HARD_MAX_TRANSCRIPT_BYTES = 4650
+MIN_TRANSCRIPT_BYTES = 2850
+MAX_TRANSCRIPT_BYTES = 3950
+TARGET_TRANSCRIPT_BYTES = 3400
+HARD_MIN_TRANSCRIPT_BYTES = 2650
+HARD_MAX_TRANSCRIPT_BYTES = 4150
 MAX_LENGTH_REPAIR_ATTEMPTS = 3
 MAX_STRUCTURE_RETRY_ATTEMPTS = 2
 ALLOWED_SPEAKERS = {"A", "B"}
@@ -117,14 +117,15 @@ class ListeningAufgabe3Generator:
                             reorder_by_evidence(payload, "questions", "transcript", start_number=19), "ideal"
                         )
 
+                    if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
+                        if progress_callback:
+                            progress_callback(95, "答案排序与元数据写入中...")
+                        return self._with_length_metadata(
+                            reorder_by_evidence(payload, "questions", "transcript", start_number=19),
+                            "accepted",
+                        )
+
                     if attempt >= MAX_LENGTH_REPAIR_ATTEMPTS:
-                        if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
-                            if progress_callback:
-                                progress_callback(95, "答案排序与元数据写入中...")
-                            return self._with_length_metadata(
-                                reorder_by_evidence(payload, "questions", "transcript", start_number=19),
-                                "accepted_with_warning",
-                            )
                         raise Aufgabe3TranscriptLengthError(current_bytes)
 
                     if current_bytes == last_bytes:
@@ -280,9 +281,15 @@ class ListeningAufgabe3Generator:
             "语言应比 Aufgabe 1 更学术、更解释型，也不能像 Aufgabe 2 那样围绕正误陈述设置观点归属干扰。"
             "用词、句式、说话方式和语气必须同时符合说话人身份、专家领域、学术访谈场景、具体主题以及老师指定的难度。"
             "standard 难度应符合 B2-C1；easy 应减少嵌套句和术语密度；hard 可以增加因果链、比较结构、抽象名词和限定条件。"
+            "出题内容质量要求：\n"
+            "- 访谈信息必须单一无歧义：每个答案点对应原文中的唯一明确出处，避免模糊或可多解的表达。\n"
+            "- 如果一个问题存在多个可能正确的信息切入点（如问'有哪些原因/机制/条件'时有多个），请在 acceptable_variants 中列出所有正确回答方式，不要只接受一种。\n"
+            "- 不要把冗长专业复合词或随机地名作为唯一可接受的答案核心。例如如果答案是冗长的机构/概念全称，应将简称或核心专名作为 answer，全称仅作为变体。\n"
+            "- 日期类答案必须同时接受带点和无点的格式（如 15. März 和 15 März）。\n"
+            "- 德语时态变化（Präsens/Präteritum/Perfekt）不构成判分差异：例如 reduziert 和 reduzierte 视为等值。\n"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外的任何文字。"
             "输出顶层字段必须包含 title、topic、expert_domain、speaker_roles、format_note、transcript、segments、questions。"
-            "transcript 必须是自然德语专家访谈，UTF-8 byte length 目标约 4243，允许范围 4050-4450。"
+            "transcript 必须是自然德语专家访谈，UTF-8 byte length 目标约 3000，允许范围 2850-3950。"
             "transcript 必须能由 segments 按顺序还原为 A:/B: 标注的完整访谈。"
             "每个 segment 只能包含一个说话人的连续发言，并包含 index、speaker_id、speaker_role、text、pause_after_ms、pause_reason。"
             "pause_after_ms 只能从 200、350、500、750、1000 中选择。"
@@ -294,7 +301,13 @@ class ListeningAufgabe3Generator:
             "每个 question 必须包含 number、prompt、question_focus、required_points、answer、acceptable_variants、evidence、scoring_note。"
             "prompt 必须是德语问题，answer 必须是关键词或短语，不要写成长句。"
             "required_points 可以为 1 或 2；多信息点题不宜过多，但必须清楚可评分。"
-            "每道题的 evidence 必须能在 transcript 中找到对应的原文片段；题目必须按 evidence 在 transcript 中的出现顺序排列。"
+            "每道题的 evidence 必须能在 transcript 中找到对应的原文片段；题目必须按 evidence 在 transcript 中的出现顺序排列。\n"
+            "acceptable_variants 要求（模拟 TestDaF 官方 Lösungsschlüssel 答案密钥）：\n"
+            "- 每条题目必须列出 2-4 个常见可接受变体，覆盖不同学生可能给出的等义表达。\n"
+            "- 必须包含：答案关键词的核心同义词、带/不带冠词的变体、常见介词搭配变体。\n"
+            "- 如果答案是一个名词（如 Klimawandel），变体应包含：der Klimawandel、globale Erwärmung、Erderwärmung 等。\n"
+            "- 如果答案是一个动词短语（如 reduziert Emissionen），变体应包含：weniger Emissionen、emittiert weniger、senkt den Ausstoß 等。\n"
+            "- 不要添加明显错误或无关的变体。每个变体必须是评分员可能判对的有效答案。"
         )
 
     def _user_prompt(self, data: ListeningAufgabe3Input) -> str:
@@ -323,8 +336,8 @@ class ListeningAufgabe3Generator:
             f"题目功能规则：{focus_instruction}\n"
             f"请生成约 {data.multi_point_questions} 道 required_points=2 的题目，其余题目 required_points=1。\n\n"
             "篇幅要求：\n"
-            "- transcript 的 UTF-8 byte length 目标约 4243。\n"
-            "- 允许范围为 4050-4450。\n"
+            "- transcript 的 UTF-8 byte length 目标约 3000。\n"
+            "- 允许范围为 2850-3950。\n"
             "- 如果内容不足，请自然增加机制解释、研究发现、比较、具体例子、限制条件或专家建议。\n"
             "- 不要为了凑长度重复无意义内容。\n\n"
             "访谈结构要求：\n"
@@ -366,7 +379,7 @@ class ListeningAufgabe3Generator:
             '      "question_focus": "cause/mechanism/comparison/consequence/use/recommendation",\n'
             '      "required_points": 1,\n'
             '      "answer": ["标准答案"],\n'
-            '      "acceptable_variants": ["可接受变体"],\n'
+            '      "acceptable_variants": ["可接受变体1", "变体2（同义词）", "变体3（不同表述）"],\n'
             '      "evidence": "原文依据",\n'
             '      "scoring_note": "评分说明"\n'
             "    }\n"

@@ -52,6 +52,15 @@
   <p class="muted">参考答案与评分由评分系统提供，此处不展示。</p>
 </section>
 
+<section class="panel scoring-links">
+  <div class="panel-title"><h2>查看评分</h2></div>
+  <p>登录评分系统可查看本题的自动评分结果（阅读/听力）或人工评分（写作/口语）。</p>
+  <div class="actions">
+    <a class="button primary" href="{{ scoring_system_url }}score/{{ attempt_id }}">查看本题评分</a>
+    <a class="button secondary" href="{{ scoring_system_url }}student">进入评分系统首页</a>
+  </div>
+</section>
+
 <div class="nav">
   <a class="button" href="/">返回练习首页</a>
   <a class="button" href="/attempts">查看全部作答记录</a>

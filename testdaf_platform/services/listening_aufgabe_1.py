@@ -1,4 +1,4 @@
-﻿"""TestDaF 听力 Aufgabe 1 生成服务。"""
+"""TestDaF 听力 Aufgabe 1 生成服务。"""
 
 import json
 from dataclasses import dataclass
@@ -11,11 +11,11 @@ from testdaf_platform.services.generation_utils import parse_json, reorder_by_ev
 
 dashscope.base_http_api_url = DASHSCOPE_BASE_URL
 
-MIN_TRANSCRIPT_BYTES = 2700
-MAX_TRANSCRIPT_BYTES = 3100
-TARGET_TRANSCRIPT_BYTES = 2857
-HARD_MIN_TRANSCRIPT_BYTES = 2500
-HARD_MAX_TRANSCRIPT_BYTES = 3300
+MIN_TRANSCRIPT_BYTES = 2000
+MAX_TRANSCRIPT_BYTES = 2600
+TARGET_TRANSCRIPT_BYTES = 2300
+HARD_MIN_TRANSCRIPT_BYTES = 1800
+HARD_MAX_TRANSCRIPT_BYTES = 2800
 MAX_LENGTH_REPAIR_ATTEMPTS = 3
 
 
@@ -69,14 +69,15 @@ class ListeningAufgabe1Generator:
                     reorder_by_evidence(payload, "questions", "transcript", start_number=1), "ideal"
                 )
 
+            if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
+                if progress_callback:
+                    progress_callback(95, "答案排序与元数据写入中...")
+                return self._with_length_metadata(
+                    reorder_by_evidence(payload, "questions", "transcript", start_number=1),
+                    "accepted",
+                )
+
             if attempt >= MAX_LENGTH_REPAIR_ATTEMPTS:
-                if HARD_MIN_TRANSCRIPT_BYTES <= current_bytes <= HARD_MAX_TRANSCRIPT_BYTES:
-                    if progress_callback:
-                        progress_callback(95, "答案排序与元数据写入中...")
-                    return self._with_length_metadata(
-                        reorder_by_evidence(payload, "questions", "transcript", start_number=1),
-                        "accepted_with_warning",
-                    )
                 raise TranscriptLengthError(current_bytes)
 
             if current_bytes == last_bytes:
@@ -222,9 +223,15 @@ class ListeningAufgabe1Generator:
             "并由 pause_reason 标注情绪转折（如 thinking、hesitation、sigh、amusement）。"
             "题目应考察具体事实、原因、计划、条件、需求、经历、任务、建议或后续安排。"
             "语言应自然、清晰、符合德国大学生活语境，难度面向 B2-C1，不能过度戏剧化。"
+            "出题内容质量要求：\n"
+            "- 对话信息必须单一无歧义：每个答案点对应原文中的唯一明确出处，避免模糊或可多解的表达。\n"
+            "- 如果一个问题存在多个可能正确的信息切入点（如问'有哪些条件'时有多个条件），请在 acceptable_variants 中列出所有正确回答方式，不要只接受一种。\n"
+            "- 不要把随机地名、机构全称中的冗长复合词作为唯一可接受的答案核心。例如机构名称 Jugendfreizeiteinrichtung Kleine Welt 应将 Kleine Welt 或 Jugendfreizeiteinrichtung Kleine Welt 作为 answer，而非强迫学生写完包含地名的全称。\n"
+            "- 日期类答案必须同时接受带点和无点的格式（如 15. März 和 15 März）。\n"
+            "- 德语时态变化（Präsens/Präteritum/Perfekt）不构成判分差异：例如 sprachen 和 sprechen 视为等值。\n"
             "你必须只输出合法 JSON，不要输出 Markdown、解释、代码块或 JSON 外的任何文字。"
             "输出顶层字段必须包含 title、topic、speaker_roles、relationship、transcript、segments、questions。"
-            "transcript 必须是自然德语对话，UTF-8 byte length 目标约 2857，允许范围 2700-3100。"
+            "transcript 必须是自然德语对话，UTF-8 byte length 目标约 2000，允许范围 2000-2600。"
             "对话只能有两个说话人，speaker_id 只能是 A 或 B。speaker_roles 必须是对象，包含 A 和 B。"
             "必须生成 segments 数组；每个 segment 只能包含一个说话人的连续发言。"
             "transcript 必须能由 segments 按顺序还原为 A:/B: 标注的完整对话。"
@@ -237,7 +244,14 @@ class ListeningAufgabe1Generator:
             "questions 必须恰好 8 个元素，每个元素包含 number、prompt、required_points、answer、acceptable_variants、evidence。"
             "每道题的 evidence 必须能在 transcript 中找到对应的原文片段；题目必须按 evidence 在 transcript 中的出现顺序排列，从前往后不颠倒。"
             "prompt 必须是德语问题，符合 TestDaF 风格；answer 必须是关键词或短语，不要写成长句。"
-            "可以自然包含少量 required_points=2 的题目，但不要超过 3 题。"
+            "可以自然包含少量 required_points=2 的题目，但不要超过 3 题。\n"
+            "acceptable_variants 要求（模拟 TestDaF 官方 Lösungsschlüssel 答案密钥）：\n"
+            "- 每条题目必须列出 2-4 个常见可接受变体，覆盖不同学生可能给出的等义表达。\n"
+            "- 必须包含：答案关键词的核心同义词、带/不带冠词的变体、常见介词搭配变体。\n"
+            "- 如果答案是一个名词（如 Umweltschutz），变体应包含：der Umweltschutz、Naturschutz、den Umweltschutz 等。\n"
+            "- 如果答案是一个动词短语（如 an der Uni studieren），变体应包含：studiert an der Uni、in der Uni studieren、besucht die Uni 等。\n"
+            "- 如果答案是一个数字或日期，变体应包含不同书写格式（如 15. Mai、15.05.、Mai 2025）。\n"
+            "- 不要添加明显错误或无关的变体。每个变体必须是评分员可能判对的有效答案。"
         )
 
     def _user_prompt(self, data: ListeningAufgabe1Input) -> str:
@@ -257,8 +271,8 @@ class ListeningAufgabe1Generator:
             f"- 说话人性别：{gendered_speakers_text(data.speaker_genders)}\n\n"
             f"信息流规则：{flow_instruction}\n\n"
             "篇幅要求：\n"
-            "- transcript 的 UTF-8 byte length 目标约 2857。\n"
-            "- 允许范围为 2700-3100。\n"
+            "- transcript 的 UTF-8 byte length 目标约 2000。\n"
+            "- 允许范围为 2000-2600。\n"
             "- 如果内容不足，请自然增加对话细节、背景信息、流程说明、条件限制或后续安排。\n"
             "- 不要为了凑长度重复无意义内容。\n\n"
             "对话结构要求：\n"
@@ -298,7 +312,7 @@ class ListeningAufgabe1Generator:
             '      "prompt": "德语问题",\n'
             '      "required_points": 1,\n'
             '      "answer": ["标准答案"],\n'
-            '      "acceptable_variants": ["可接受变体"],\n'
+            '      "acceptable_variants": ["可接受变体1", "变体2（同义词）", "变体3（不同介词）"],\n'
             '      "evidence": "原文依据"\n'
             "    }\n"
             "  ]\n"
